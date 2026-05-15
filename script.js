@@ -175,7 +175,7 @@ function renderDashboard() {
       <div>
         ${currentBook.coverImage ? `<img src="${escapeHtml(currentBook.coverImage)}" alt="${escapeHtml(currentBook.title)} 표지" />` : `<div class="book-placeholder">${escapeHtml(currentBook.title)}</div>`}
         <p class="panel-meta">현재 읽는 책</p>
-        <h2>${escapeHtml(currentBook.title)}</h2>
+        <h2 class="book-title-accent">${escapeHtml(currentBook.title)}</h2>
         <p class="card-body">${escapeHtml(currentBook.author)}</p>
         ${formatMemoBlock(currentBook.memo, '책 내용')}
       </div>
@@ -196,12 +196,12 @@ function renderDashboard() {
       <div>
         <p class="panel-meta">다음 모임</p>
         <h2>${escapeHtml(nextMeeting.title)}</h2>
-        <p class="card-body">${formatDate(nextMeeting.date)} ${nextMeeting.time || ''}</p>
-        <p class="card-meta">${escapeHtml(nextMeeting.location || '장소 미정')}</p>
+        <p class="card-body meeting-date-accent">${formatDate(nextMeeting.date)} ${nextMeeting.time || ''}</p>
+        <p class="card-meta meeting-location-accent">${escapeHtml(nextMeeting.location || '장소 미정')}</p>
         ${meetingBook ? `
           <div class="meeting-book-summary">
             <p class="panel-meta">함께 읽는 책</p>
-            <p class="card-body">${escapeHtml(meetingBook.title)}</p>
+            <p class="card-body book-title-accent">${escapeHtml(meetingBook.title)}</p>
             <p class="card-meta">${escapeHtml(meetingBook.author)}</p>
           </div>
         ` : `<p class="card-meta book-detail-line">연결된 책 없음</p>`}
@@ -225,8 +225,8 @@ function renderDashboard() {
         <div class="member-mini-list">
           ${visibleMembers.map(member => `
             <div class="member-mini-item">
-              <span>${escapeHtml(member.name)}</span>
-              <span>${escapeHtml(member.phone || '연락처 없음')}</span>
+              <span class="member-name-accent">${escapeHtml(member.name)}</span>
+              <span class="member-phone-accent">${escapeHtml(member.phone || '연락처 없음')}</span>
             </div>
           `).join('')}
         </div>
@@ -247,7 +247,7 @@ function renderBooks() {
     <article class="book-card">
       ${book.coverImage ? `<img class="book-cover" src="${escapeHtml(book.coverImage)}" alt="${escapeHtml(book.title)} 표지" />` : `<div class="book-placeholder">${escapeHtml(book.title)}</div>`}
       <div>
-        <h2 class="card-title">${escapeHtml(book.title)}</h2>
+        <h2 class="card-title book-title-accent">${escapeHtml(book.title)}</h2>
         <p class="card-body">${escapeHtml(book.author)}</p>
         <p class="card-meta">${book.status === 'reading' ? '읽는 중' : '완료'} · ${formatDate(book.startDate)} - ${formatDate(book.endDate)}</p>
         ${formatMemoBlock(book.memo, '책 내용')}
@@ -270,8 +270,8 @@ function renderMembers() {
   container.innerHTML = state.members.map(member => `
     <div class="list-row">
       <div>
-        <p class="row-title">${escapeHtml(member.name)}</p>
-        <p class="row-sub">${escapeHtml(member.phone || '연락처 없음')} · ${member.status === 'active' ? '활동 중' : '비활성'} · ${member.joinedAt || '-'}</p>
+        <p class="row-title member-name-accent">${escapeHtml(member.name)}</p>
+        <p class="row-sub"><span class="member-phone-accent">${escapeHtml(member.phone || '연락처 없음')}</span> · ${member.status === 'active' ? '활동 중' : '비활성'} · ${member.joinedAt || '-'}</p>
       </div>
       <div class="row-actions">
         <button class="btn btn-secondary" onclick="editMember('${member.id}')">수정</button>
@@ -297,8 +297,8 @@ function renderMeetings() {
       <div class="list-row">
         <div>
           <p class="row-title">${escapeHtml(meeting.title)}</p>
-          <p class="row-sub">${formatDate(meeting.date)} ${meeting.time || ''} · ${escapeHtml(meeting.location || '장소 미정')}</p>
-          <p class="row-sub">${book ? `${escapeHtml(book.title)} · ${escapeHtml(book.author)}` : '책 없음'}</p>
+          <p class="row-sub"><span class="meeting-date-accent">${formatDate(meeting.date)} ${meeting.time || ''}</span> · <span class="meeting-location-accent">${escapeHtml(meeting.location || '장소 미정')}</span></p>
+          <p class="row-sub">${book ? `<span class="book-title-accent">${escapeHtml(book.title)}</span> · ${escapeHtml(book.author)}` : '책 없음'}</p>
           <p class="row-sub">참석 ${attendCount}명 / 전체 ${state.members.length}명</p>
         </div>
         <div class="row-actions">
@@ -353,8 +353,8 @@ function renderAttendance() {
     return `
       <div class="list-row">
         <div>
-          <p class="row-title">${escapeHtml(member.name)}</p>
-          <p class="row-sub">${escapeHtml(member.phone || '연락처 없음')} · 현재 상태: ${statusLabel(status)}</p>
+          <p class="row-title member-name-accent">${escapeHtml(member.name)}</p>
+          <p class="row-sub"><span class="member-phone-accent">${escapeHtml(member.phone || '연락처 없음')}</span> · 현재 상태: ${statusLabel(status)}</p>
         </div>
         <div class="attendance-controls">
           <button class="${status === 'attend' ? 'active' : ''}" onclick="setAttendance('${meetingId}', '${member.id}', 'attend')">참석</button>

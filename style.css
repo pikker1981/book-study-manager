@@ -591,3 +591,29 @@ body {
     animation: none;
   }
 }
+
+
+/* 2026-05-15 patch: accent important study information */
+.book-title-accent,
+.meeting-date-accent,
+.meeting-location-accent,
+.member-name-accent,
+.member-phone-accent {
+  color: var(--accent) !important;
+}
+
+.book-title-accent,
+.member-name-accent {
+  font-weight: 800;
+}
+
+.meeting-date-accent,
+.meeting-location-accent,
+.member-phone-accent {
+  font-weight: 700;
+}
+
+.member-mini-item .member-name-accent,
+.member-mini-item .member-phone-accent {
+  color: var(--accent) !important;
+}
