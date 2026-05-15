@@ -283,9 +283,9 @@ textarea { resize: vertical; }
 .mobile-nav { display: none; }
 
 @media (max-width: 960px) {
-  .app-header { padding: 20px; align-items: flex-start; }
+  .app-header { padding: 20px; align-items: flex-start; z-index: 40; }
   .top-nav { display: none; }
-  .page-container { padding: 32px 20px 96px; }
+  .page-container { padding: 96px 20px 40px; }
   .dashboard-grid { grid-template-columns: 1fr; }
   .editorial-list { grid-template-columns: repeat(2, 1fr); }
   .section-heading.compact { grid-template-columns: 1fr; }
@@ -294,18 +294,21 @@ textarea { resize: vertical; }
     position: fixed;
     left: 0;
     right: 0;
-    bottom: 0;
-    z-index: 30;
+    top: 84px;
+    bottom: auto;
+    z-index: 35;
     display: grid;
     grid-template-columns: repeat(5, 1fr);
-    background: var(--bg);
-    border-top: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(10px);
+    border-top: 0;
+    border-bottom: 1px solid var(--line);
   }
   .mobile-nav a {
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 64px;
+    min-height: 56px;
     font-size: 12px;
   }
 }
