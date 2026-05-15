@@ -747,3 +747,35 @@ body {
     margin-left: 0;
   }
 }
+
+/* 2026-05-15 patch: subtle gradient for current reading book panel */
+#currentBookPanel {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(0, 71, 171, 0.22);
+  background:
+    radial-gradient(circle at 8% 0%, rgba(0, 71, 171, 0.13) 0%, rgba(0, 71, 171, 0.06) 28%, transparent 56%),
+    linear-gradient(135deg, rgba(0, 71, 171, 0.075) 0%, rgba(255, 255, 255, 0.96) 46%, rgba(0, 71, 171, 0.045) 100%);
+}
+
+#currentBookPanel::after {
+  content: '';
+  position: absolute;
+  right: -72px;
+  bottom: -88px;
+  width: 220px;
+  height: 220px;
+  border: 1px solid rgba(0, 71, 171, 0.12);
+  transform: rotate(18deg);
+  pointer-events: none;
+}
+
+#currentBookPanel > * {
+  position: relative;
+  z-index: 1;
+}
+
+#currentBookPanel img,
+#currentBookPanel .book-placeholder {
+  background: rgba(255, 255, 255, 0.62);
+}
