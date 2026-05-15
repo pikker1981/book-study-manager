@@ -141,6 +141,7 @@ function render() {
   renderMeetingBookOptions();
   renderAttendanceSelector();
   renderAttendance();
+  initTypewriterAnimations();
 }
 
 function renderNavigation() {
@@ -203,7 +204,7 @@ function renderDashboard() {
 
   const totalMembers = state.members.length;
   const activeMembers = state.members.filter(member => member.status === 'active').length;
-  const visibleMembers = state.members.slice(0, 5);
+  const visibleMembers = state.members.slice(0, 6);
   const hiddenCount = Math.max(totalMembers - visibleMembers.length, 0);
   attendancePanel.innerHTML = `
     <div>
@@ -603,21 +604,49 @@ function mapAttendanceFromDb(row) {
   };
 }
 
+let typewriterTimers = [];
+
+function initTypewriterAnimations() {
+  typewriterTimers.forEach(timer => clearInterval(timer));
+  typewriterTimers = [];
+
+  const targets = $$('[data-typewriter-text]');
+  targets.forEach(target => {
+    const text = target.dataset.typewriterText || '';
+    if (!text) return;
+
+    target.textContent = '';
+    target.classList.add('is-typing');
+
+    let index = 0;
+    const step = text.length > 450 ? 3 : text.length > 220 ? 2 : 1;
+    const speed = text.length > 450 ? 8 : 13;
+
+    const timer = setInterval(() => {
+      index = Math.min(index + step, text.length);
+      target.textContent = text.slice(0, index);
+
+      if (index >= text.length) {
+        clearInterval(timer);
+        target.classList.remove('is-typing');
+      }
+    }, speed);
+
+    typewriterTimers.push(timer);
+  });
+}
+
 function formatMemoBlock(memo, title = '내용') {
   if (!memo) return '';
-  const normalized = String(memo).replace(/\r\n/g, '\n').trim();
+  const normalized = String(memo).replace(/
+/g, '
+').trim();
   if (!normalized) return '';
-  const paragraphs = normalized
-    .split(/\n{2,}/)
-    .map(block => block.trim())
-    .filter(Boolean)
-    .map(block => `<p>${escapeHtml(block).replace(/\n/g, '<br>')}</p>`)
-    .join('');
 
   return `
     <section class="book-memo-card" aria-label="${escapeHtml(title)}">
       <p class="book-memo-label">${escapeHtml(title)}</p>
-      <div class="book-memo-content">${paragraphs}</div>
+      <div class="book-memo-content typewriter-content" data-typewriter-text="${escapeHtml(normalized)}"></div>
     </section>
   `;
 }
