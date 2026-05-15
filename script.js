@@ -25,9 +25,15 @@ init();
 async function init() {
   bindLockEvents();
 
-  if (sessionStorage.getItem('bookStudyUnlocked') === 'true') {
+  if (localStorage.getItem('bookStudyUnlocked') === 'true' || sessionStorage.getItem('bookStudyUnlocked') === 'true') {
     await unlockAndStart();
   }
+}
+
+function normalizePassword(value) {
+  return String(value || '')
+    .normalize('NFKC')
+    .trim();
 }
 
 function bindLockEvents() {
@@ -36,17 +42,21 @@ function bindLockEvents() {
     event.preventDefault();
     const passwordInput = $('#accessPassword');
     const error = $('#lockError');
-    const inputPassword = passwordInput?.value || '';
-    const appPassword = config.APP_PASSWORD || 'bookstudy';
+    const inputPassword = normalizePassword(passwordInput?.value || '');
+    const appPassword = normalizePassword(config.APP_PASSWORD || 'bookstudy');
 
     if (inputPassword === appPassword) {
       sessionStorage.setItem('bookStudyUnlocked', 'true');
+      localStorage.setItem('bookStudyUnlocked', 'true');
       if (error) error.hidden = true;
       await unlockAndStart();
       return;
     }
 
-    if (error) error.hidden = false;
+    if (error) {
+      error.textContent = '비밀번호가 맞지 않습니다. config.js의 APP_PASSWORD 값과 같은지 확인하세요.';
+      error.hidden = false;
+    }
     passwordInput?.select();
   });
 }
@@ -638,9 +648,7 @@ function initTypewriterAnimations() {
 
 function formatMemoBlock(memo, title = '내용') {
   if (!memo) return '';
-  const normalized = String(memo).replace(/
-/g, '
-').trim();
+  const normalized = String(memo).replace(/\r\n/g, '\n').trim();
   if (!normalized) return '';
 
   return `
