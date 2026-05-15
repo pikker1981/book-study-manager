@@ -7,23 +7,22 @@
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
-  <div id="authScreen" class="auth-screen">
-    <form id="loginForm" class="auth-card">
+
+  <section id="lockScreen" class="lock-screen" aria-label="비밀번호 입력 화면">
+    <form id="lockForm" class="lock-card">
       <p class="eyebrow">Book Study</p>
-      <h1>관리자 로그인</h1>
-      <p class="lead">Supabase에 저장된 책, 멤버, 일정, 참석 정보를 불러옵니다.</p>
-      <div id="configWarning" class="notice warning" hidden>config.js에 Supabase URL과 Key를 먼저 입력하세요.</div>
-      <div class="form-row full">
-        <label>이메일</label>
-        <input name="email" type="email" autocomplete="email" required placeholder="관리자 이메일" />
+      <h1>비밀번호를 입력하세요.</h1>
+      <p class="lead">공용 비밀번호를 입력하면 책, 멤버, 일정, 참석 여부를 수정할 수 있습니다.</p>
+      <div class="form-row single">
+        <label for="accessPassword">비밀번호</label>
+        <input id="accessPassword" name="accessPassword" type="password" autocomplete="current-password" required placeholder="비밀번호 입력" />
       </div>
-      <div class="form-row full">
-        <label>비밀번호</label>
-        <input name="password" type="password" autocomplete="current-password" required placeholder="Supabase Auth 비밀번호" />
-      </div>
-      <button class="btn btn-primary auth-submit" type="submit">로그인</button>
-      <p id="authMessage" class="form-help"></p>
+      <p id="lockError" class="form-error" hidden>비밀번호가 맞지 않습니다.</p>
+      <button type="submit" class="btn btn-primary full-width">들어가기</button>
     </form>
+  </section>
+  <div id="configWarning" class="notice warning" hidden>
+    config.js에 Supabase URL과 publishable/anon key를 입력해야 데이터를 불러올 수 있어요.
   </div>
 
   <div id="loadingScreen" class="loading-screen" hidden>데이터를 불러오는 중입니다.</div>
@@ -41,7 +40,6 @@
         <a href="#meetings" data-nav="meetings">Meetings</a>
         <a href="#attendance" data-nav="attendance">Attendance</a>
       </nav>
-      <button class="btn btn-secondary header-logout" id="logoutButton" type="button">로그아웃</button>
     </header>
 
     <main class="page-container">
@@ -108,7 +106,7 @@
     </main>
   </div>
 
-  <div class="mobile-nav" aria-label="모바일 메뉴">
+  <div class="mobile-nav" id="mobileNav" aria-label="모바일 메뉴" hidden>
     <a href="#dashboard" data-nav="dashboard">홈</a>
     <a href="#books" data-nav="books">책</a>
     <a href="#members" data-nav="members">멤버</a>

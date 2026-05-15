@@ -17,36 +17,59 @@ let state = {
   attendance: []
 };
 
-let currentUser = null;
-
 const $ = selector => document.querySelector(selector);
 const $$ = selector => Array.from(document.querySelectorAll(selector));
 
 init();
 
 async function init() {
+  bindLockEvents();
+
+  if (sessionStorage.getItem('bookStudyUnlocked') === 'true') {
+    await unlockAndStart();
+  }
+}
+
+function bindLockEvents() {
+  const lockForm = $('#lockForm');
+  lockForm?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const passwordInput = $('#accessPassword');
+    const error = $('#lockError');
+    const inputPassword = passwordInput?.value || '';
+    const appPassword = config.APP_PASSWORD || 'bookstudy';
+
+    if (inputPassword === appPassword) {
+      sessionStorage.setItem('bookStudyUnlocked', 'true');
+      if (error) error.hidden = true;
+      await unlockAndStart();
+      return;
+    }
+
+    if (error) error.hidden = false;
+    passwordInput?.select();
+  });
+}
+
+async function unlockAndStart() {
+  $('#lockScreen')?.setAttribute('hidden', '');
+  $('#appShell')?.removeAttribute('hidden');
+  $('#mobileNav')?.removeAttribute('hidden');
+
   bindEvents();
   showConfigWarningIfNeeded();
 
   if (!db) {
-    showAuth();
+    showLoading(false);
+    render();
     return;
   }
 
-  const { data } = await db.auth.getSession();
-  if (data?.session?.user) {
-    currentUser = data.session.user;
-    await enterApp();
-  } else {
-    showAuth();
-  }
+  await enterApp();
 }
 
 function bindEvents() {
   window.addEventListener('hashchange', renderNavigation);
-
-  $('#loginForm')?.addEventListener('submit', handleLogin);
-  $('#logoutButton')?.addEventListener('click', handleLogout);
 
   $$('[data-open-modal]').forEach(button => {
     button.addEventListener('click', () => openCreateModal(button.dataset.openModal));
@@ -67,63 +90,22 @@ function showConfigWarningIfNeeded() {
   if (warning) warning.hidden = hasSupabaseConfig;
 }
 
-async function handleLogin(event) {
-  event.preventDefault();
-  if (!db) return setAuthMessage('config.js 설정이 필요합니다.');
-
-  const form = event.currentTarget;
-  const email = form.email.value.trim();
-  const password = form.password.value;
-
-  setAuthMessage('로그인 중입니다.');
-  const { data, error } = await db.auth.signInWithPassword({ email, password });
-  if (error) {
-    setAuthMessage(`로그인 실패: ${error.message}`);
-    return;
-  }
-
-  currentUser = data.user;
-  setAuthMessage('');
-  await enterApp();
-}
-
-async function handleLogout() {
-  if (!db) return;
-  await db.auth.signOut();
-  currentUser = null;
-  state = { books: [], members: [], meetings: [], attendance: [] };
-  showAuth();
-}
-
 async function enterApp() {
   showLoading(true);
   try {
     await loadAll();
-    $('#authScreen').hidden = true;
-    $('#appShell').hidden = false;
     showLoading(false);
     render();
   } catch (error) {
     showLoading(false);
-    showAuth();
-    setAuthMessage(`데이터 로딩 실패: ${error.message}`);
+    alert(`데이터 로딩 실패: ${error.message}`);
+    render();
   }
-}
-
-function showAuth() {
-  $('#authScreen').hidden = false;
-  $('#appShell').hidden = true;
-  showLoading(false);
 }
 
 function showLoading(visible) {
   const loading = $('#loadingScreen');
   if (loading) loading.hidden = !visible;
-}
-
-function setAuthMessage(message) {
-  const target = $('#authMessage');
-  if (target) target.textContent = message;
 }
 
 async function loadAll() {
@@ -141,6 +123,7 @@ async function loadAll() {
 }
 
 async function selectTable(table, orderColumn, ascending) {
+  if (!db) return [];
   const { data, error } = await db
     .from(table)
     .select('*')
@@ -401,6 +384,7 @@ async function handleMeetingSubmit(event) {
 }
 
 async function upsertRow(table, id, payload) {
+  if (!db) return alert('config.js에 Supabase 설정이 필요합니다.');
   let query;
   if (id) {
     query = db.from(table).update(payload).eq('id', id).select().single();
@@ -412,6 +396,7 @@ async function upsertRow(table, id, payload) {
 }
 
 async function deleteRow(table, id) {
+  if (!db) return alert('config.js에 Supabase 설정이 필요합니다.');
   const { error } = await db.from(table).delete().eq('id', id);
   if (error) throwAndAlert(error);
 }
@@ -482,6 +467,7 @@ window.deleteMeeting = async function deleteMeeting(id) {
 };
 
 window.setAttendance = async function setAttendance(meetingId, memberId, status) {
+  if (!db) return alert('config.js에 Supabase 설정이 필요합니다.');
   const existing = state.attendance.find(item => item.meetingId === meetingId && item.memberId === memberId);
   const payload = {
     meeting_id: meetingId,

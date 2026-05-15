@@ -368,3 +368,42 @@ textarea { resize: vertical; }
     background: var(--bg);
   }
 }
+
+/* Password gate */
+.lock-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 48px 20px;
+  background: #ffffff;
+}
+
+.lock-screen[hidden] {
+  display: none;
+}
+
+.lock-card {
+  width: min(100%, 420px);
+  border: 1px solid #c4c4c4;
+  padding: 32px;
+  background: #ffffff;
+}
+
+.lock-card h1 {
+  margin: 8px 0 8px;
+  font-size: 30px;
+  line-height: 1.13;
+  font-weight: 700;
+  color: #000000;
+}
+
+.form-error {
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #ff003c;
+}
+
+.full-width {
+  width: 100%;
+}
