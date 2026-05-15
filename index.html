@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Book Study Manager</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="brand">
+        <a href="#dashboard" class="brand-mark" aria-label="Book Study Manager 홈">Book Study</a>
+        <p class="brand-caption">작게 운영하는 독서모임 관리 앱</p>
+      </div>
+      <nav class="top-nav" aria-label="주요 메뉴">
+        <a href="#dashboard" data-nav="dashboard">Dashboard</a>
+        <a href="#books" data-nav="books">Books</a>
+        <a href="#members" data-nav="members">Members</a>
+        <a href="#meetings" data-nav="meetings">Meetings</a>
+        <a href="#attendance" data-nav="attendance">Attendance</a>
+      </nav>
+    </header>
+
+    <main class="page-container">
+      <section id="dashboard" class="view active" data-view="dashboard">
+        <div class="section-heading">
+          <p class="eyebrow">Dashboard</p>
+          <h1>이번 모임을 한눈에 확인해요.</h1>
+          <p class="lead">현재 읽는 책, 다음 일정, 참석 현황을 한 화면에서 관리합니다.</p>
+        </div>
+
+        <div class="dashboard-grid">
+          <article class="feature-panel" id="currentBookPanel"></article>
+          <article class="feature-panel" id="nextMeetingPanel"></article>
+          <article class="feature-panel" id="attendancePanel"></article>
+        </div>
+
+        <div class="quick-actions">
+          <button class="btn btn-primary" data-open-modal="bookModal">+ 책 등록</button>
+          <button class="btn btn-secondary" data-open-modal="memberModal">+ 멤버 추가</button>
+          <button class="btn btn-secondary" data-open-modal="meetingModal">+ 일정 추가</button>
+          <a class="btn btn-ghost" href="#attendance">참여 확인</a>
+        </div>
+      </section>
+
+      <section id="books" class="view" data-view="books">
+        <div class="section-heading compact">
+          <p class="eyebrow">Books</p>
+          <h1>읽을 책</h1>
+          <button class="btn btn-primary" data-open-modal="bookModal">+ 새 책 등록</button>
+        </div>
+        <div id="bookList" class="editorial-list"></div>
+      </section>
+
+      <section id="members" class="view" data-view="members">
+        <div class="section-heading compact">
+          <p class="eyebrow">Members</p>
+          <h1>멤버</h1>
+          <button class="btn btn-primary" data-open-modal="memberModal">+ 멤버 추가</button>
+        </div>
+        <div id="memberList" class="table-like-list"></div>
+      </section>
+
+      <section id="meetings" class="view" data-view="meetings">
+        <div class="section-heading compact">
+          <p class="eyebrow">Meetings</p>
+          <h1>모임 일정</h1>
+          <button class="btn btn-primary" data-open-modal="meetingModal">+ 일정 추가</button>
+        </div>
+        <div id="meetingList" class="table-like-list"></div>
+      </section>
+
+      <section id="attendance" class="view" data-view="attendance">
+        <div class="section-heading compact">
+          <p class="eyebrow">Attendance</p>
+          <h1>참여 여부 확인</h1>
+        </div>
+
+        <div class="form-row single">
+          <label for="attendanceMeetingSelect">모임 일정 선택</label>
+          <select id="attendanceMeetingSelect"></select>
+        </div>
+        <div id="attendanceList" class="attendance-list"></div>
+      </section>
+    </main>
+  </div>
+
+  <div class="mobile-nav" aria-label="모바일 메뉴">
+    <a href="#dashboard" data-nav="dashboard">홈</a>
+    <a href="#books" data-nav="books">책</a>
+    <a href="#members" data-nav="members">멤버</a>
+    <a href="#meetings" data-nav="meetings">일정</a>
+    <a href="#attendance" data-nav="attendance">참석</a>
+  </div>
+
+  <dialog id="bookModal" class="modal">
+    <form id="bookForm" method="dialog" class="modal-card">
+      <div class="modal-header">
+        <h2>책 등록</h2>
+        <button type="button" class="icon-button" data-close-modal="bookModal">닫기</button>
+      </div>
+      <input type="hidden" name="id" />
+      <div class="form-grid">
+        <div class="form-row">
+          <label>책 제목</label>
+          <input name="title" required placeholder="예: 지구 끝의 온실" />
+        </div>
+        <div class="form-row">
+          <label>저자</label>
+          <input name="author" required placeholder="예: 김초엽" />
+        </div>
+        <div class="form-row">
+          <label>읽기 시작일</label>
+          <input name="startDate" type="date" />
+        </div>
+        <div class="form-row">
+          <label>읽기 종료일</label>
+          <input name="endDate" type="date" />
+        </div>
+        <div class="form-row full">
+          <label>표지 이미지 URL</label>
+          <input name="coverImage" placeholder="선택 입력" />
+        </div>
+        <div class="form-row full">
+          <label>메모</label>
+          <textarea name="memo" rows="4" placeholder="이번 책을 읽는 이유나 범위를 적어두세요."></textarea>
+        </div>
+        <div class="form-row">
+          <label>상태</label>
+          <select name="status">
+            <option value="reading">읽는 중</option>
+            <option value="finished">완료</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" data-close-modal="bookModal">취소</button>
+        <button type="submit" class="btn btn-primary">저장</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="memberModal" class="modal">
+    <form id="memberForm" method="dialog" class="modal-card">
+      <div class="modal-header">
+        <h2>멤버 추가</h2>
+        <button type="button" class="icon-button" data-close-modal="memberModal">닫기</button>
+      </div>
+      <input type="hidden" name="id" />
+      <div class="form-grid">
+        <div class="form-row">
+          <label>이름</label>
+          <input name="name" required placeholder="예: 김하은" />
+        </div>
+        <div class="form-row">
+          <label>연락처</label>
+          <input name="phone" placeholder="선택 입력" />
+        </div>
+        <div class="form-row full">
+          <label>메모</label>
+          <textarea name="memo" rows="3" placeholder="운영 참고사항을 적어두세요."></textarea>
+        </div>
+        <div class="form-row">
+          <label>상태</label>
+          <select name="status">
+            <option value="active">활동 중</option>
+            <option value="inactive">비활성</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" data-close-modal="memberModal">취소</button>
+        <button type="submit" class="btn btn-primary">저장</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="meetingModal" class="modal">
+    <form id="meetingForm" method="dialog" class="modal-card">
+      <div class="modal-header">
+        <h2>일정 추가</h2>
+        <button type="button" class="icon-button" data-close-modal="meetingModal">닫기</button>
+      </div>
+      <input type="hidden" name="id" />
+      <div class="form-grid">
+        <div class="form-row full">
+          <label>대상 책</label>
+          <select name="bookId" id="meetingBookSelect" required></select>
+        </div>
+        <div class="form-row full">
+          <label>모임 제목</label>
+          <input name="title" required placeholder="예: 1회차 독서모임" />
+        </div>
+        <div class="form-row">
+          <label>날짜</label>
+          <input name="date" type="date" required />
+        </div>
+        <div class="form-row">
+          <label>시간</label>
+          <input name="time" type="time" required />
+        </div>
+        <div class="form-row full">
+          <label>장소 / 링크</label>
+          <input name="location" placeholder="예: 강남역 카페 또는 Zoom 링크" />
+        </div>
+        <div class="form-row full">
+          <label>메모</label>
+          <textarea name="memo" rows="3" placeholder="읽기 범위나 준비사항을 적어두세요."></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" data-close-modal="meetingModal">취소</button>
+        <button type="submit" class="btn btn-primary">저장</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="./script.js"></script>
+</body>
+</html>
