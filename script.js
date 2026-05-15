@@ -166,8 +166,12 @@ function renderDashboard() {
         <p class="panel-meta">현재 읽는 책</p>
         <h2>${escapeHtml(currentBook.title)}</h2>
         <p class="card-body">${escapeHtml(currentBook.author)}</p>
+        ${currentBook.memo ? `<p class="card-meta book-detail-line">${escapeHtml(currentBook.memo)}</p>` : ''}
       </div>
-      <p class="card-meta">${formatDate(currentBook.startDate)} - ${formatDate(currentBook.endDate)}</p>
+      <div class="panel-footer-actions">
+        <p class="card-meta">${formatDate(currentBook.startDate)} - ${formatDate(currentBook.endDate)}</p>
+        <button class="text-button" type="button" onclick="editBook('${currentBook.id}')">책 내용 수정</button>
+      </div>
     `;
   } else {
     currentBookPanel.innerHTML = `<div><p class="panel-meta">현재 읽는 책</p><h2>등록된 책이 없어요</h2></div>`;
@@ -176,12 +180,20 @@ function renderDashboard() {
   if (nextMeeting) {
     const attendance = getMeetingAttendance(nextMeeting.id);
     const attendCount = attendance.filter(item => item.status === 'attend').length;
+    const meetingBook = getBook(nextMeeting.bookId);
     nextMeetingPanel.innerHTML = `
       <div>
         <p class="panel-meta">다음 모임</p>
         <h2>${escapeHtml(nextMeeting.title)}</h2>
         <p class="card-body">${formatDate(nextMeeting.date)} ${nextMeeting.time || ''}</p>
         <p class="card-meta">${escapeHtml(nextMeeting.location || '장소 미정')}</p>
+        ${meetingBook ? `
+          <div class="meeting-book-summary">
+            <p class="panel-meta">함께 읽는 책</p>
+            <p class="card-body">${escapeHtml(meetingBook.title)}</p>
+            <p class="card-meta">${escapeHtml(meetingBook.author)}</p>
+          </div>
+        ` : `<p class="card-meta book-detail-line">연결된 책 없음</p>`}
       </div>
       <p class="card-meta">참석 예정 ${attendCount}명 / 전체 ${state.members.length}명</p>
     `;
@@ -191,13 +203,25 @@ function renderDashboard() {
 
   const totalMembers = state.members.length;
   const activeMembers = state.members.filter(member => member.status === 'active').length;
+  const visibleMembers = state.members.slice(0, 5);
+  const hiddenCount = Math.max(totalMembers - visibleMembers.length, 0);
   attendancePanel.innerHTML = `
     <div>
       <p class="panel-meta">멤버 현황</p>
       <div class="panel-number">${activeMembers}</div>
       <p class="card-body">활동 중인 멤버</p>
+      ${visibleMembers.length ? `
+        <div class="member-mini-list">
+          ${visibleMembers.map(member => `
+            <div class="member-mini-item">
+              <span>${escapeHtml(member.name)}</span>
+              <span>${escapeHtml(member.phone || '연락처 없음')}</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : `<p class="card-meta book-detail-line">등록된 멤버가 없어요.</p>`}
     </div>
-    <p class="card-meta">전체 ${totalMembers}명</p>
+    <p class="card-meta">전체 ${totalMembers}명${hiddenCount ? ` · 외 ${hiddenCount}명` : ''}</p>
   `;
 }
 
@@ -215,9 +239,10 @@ function renderBooks() {
         <h2 class="card-title">${escapeHtml(book.title)}</h2>
         <p class="card-body">${escapeHtml(book.author)}</p>
         <p class="card-meta">${book.status === 'reading' ? '읽는 중' : '완료'} · ${formatDate(book.startDate)} - ${formatDate(book.endDate)}</p>
+        ${book.memo ? `<p class="card-meta book-detail-line">${escapeHtml(book.memo)}</p>` : ''}
       </div>
       <div class="card-actions">
-        <button class="btn btn-secondary" onclick="editBook('${book.id}')">수정</button>
+        <button class="btn btn-secondary" onclick="editBook('${book.id}')">내용 수정</button>
         <button class="btn btn-secondary status-danger" onclick="deleteBook('${book.id}')">삭제</button>
       </div>
     </article>
@@ -261,7 +286,8 @@ function renderMeetings() {
       <div class="list-row">
         <div>
           <p class="row-title">${escapeHtml(meeting.title)}</p>
-          <p class="row-sub">${formatDate(meeting.date)} ${meeting.time || ''} · ${escapeHtml(meeting.location || '장소 미정')} · ${escapeHtml(book?.title || '책 없음')}</p>
+          <p class="row-sub">${formatDate(meeting.date)} ${meeting.time || ''} · ${escapeHtml(meeting.location || '장소 미정')}</p>
+          <p class="row-sub">${book ? `${escapeHtml(book.title)} · ${escapeHtml(book.author)}` : '책 없음'}</p>
           <p class="row-sub">참석 ${attendCount}명 / 전체 ${state.members.length}명</p>
         </div>
         <div class="row-actions">
@@ -317,7 +343,7 @@ function renderAttendance() {
       <div class="list-row">
         <div>
           <p class="row-title">${escapeHtml(member.name)}</p>
-          <p class="row-sub">현재 상태: ${statusLabel(status)}</p>
+          <p class="row-sub">${escapeHtml(member.phone || '연락처 없음')} · 현재 상태: ${statusLabel(status)}</p>
         </div>
         <div class="attendance-controls">
           <button class="${status === 'attend' ? 'active' : ''}" onclick="setAttendance('${meetingId}', '${member.id}', 'attend')">참석</button>
