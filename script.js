@@ -177,7 +177,7 @@ function renderDashboard() {
         <p class="panel-meta">현재 읽는 책</p>
         <h2 class="book-title-accent">${escapeHtml(currentBook.title)}</h2>
         <p class="card-body">${escapeHtml(currentBook.author)}</p>
-        ${formatMemoBlock(currentBook.memo, '책 내용')}
+        ${formatBookDetails(currentBook)}
       </div>
       <div class="panel-footer-actions">
         <p class="card-meta">${formatDate(currentBook.startDate)} - ${formatDate(currentBook.endDate)}</p>
@@ -250,7 +250,7 @@ function renderBooks() {
         <h2 class="card-title book-title-accent">${escapeHtml(book.title)}</h2>
         <p class="card-body">${escapeHtml(book.author)}</p>
         <p class="card-meta">${book.status === 'reading' ? '읽는 중' : '완료'} · ${formatDate(book.startDate)} - ${formatDate(book.endDate)}</p>
-        ${formatMemoBlock(book.memo, '책 내용')}
+        ${formatBookDetails(book)}
       </div>
       <div class="card-actions">
         <button class="btn btn-secondary" onclick="editBook('${book.id}')">내용 수정</button>
@@ -376,7 +376,8 @@ async function handleBookSubmit(event) {
     start_date: form.startDate.value || null,
     end_date: form.endDate.value || null,
     status: form.status.value,
-    memo: form.memo.value.trim() || null
+    memo: form.memo.value.trim() || null,
+    toc: form.toc.value.trim() || null
   };
 
   if (!payload.title || !payload.author) return alert('책 제목과 저자는 필수입니다.');
@@ -393,7 +394,8 @@ async function handleMemberSubmit(event) {
     phone: form.phone.value.trim() || null,
     status: form.status.value,
     joined_at: form.joinedAt.value || new Date().toISOString().slice(0, 10),
-    memo: form.memo.value.trim() || null
+    memo: form.memo.value.trim() || null,
+    toc: form.toc.value.trim() || null
   };
 
   if (!payload.name) return alert('이름은 필수입니다.');
@@ -411,7 +413,8 @@ async function handleMeetingSubmit(event) {
     meeting_date: form.date.value,
     meeting_time: form.time.value || null,
     location: form.location.value.trim() || null,
-    memo: form.memo.value.trim() || null
+    memo: form.memo.value.trim() || null,
+    toc: form.toc.value.trim() || null
   };
 
   if (!payload.title || !payload.meeting_date) return alert('모임 제목과 날짜는 필수입니다.');
@@ -455,6 +458,7 @@ window.editBook = function editBook(id) {
   form.endDate.value = book.endDate || '';
   form.status.value = book.status;
   form.memo.value = book.memo || '';
+  form.toc.value = book.toc || '';
   openModal('bookModal', '책 수정');
 };
 
@@ -577,7 +581,8 @@ function mapBookFromDb(row) {
     startDate: row.start_date || '',
     endDate: row.end_date || '',
     status: row.status,
-    memo: row.memo || ''
+    memo: row.memo || '',
+    toc: row.toc || ''
   };
 }
 
@@ -610,7 +615,8 @@ function mapAttendanceFromDb(row) {
     meetingId: row.meeting_id,
     memberId: row.member_id,
     status: row.status,
-    memo: row.memo || ''
+    memo: row.memo || '',
+    toc: row.toc || ''
   };
 }
 
@@ -670,19 +676,45 @@ function startTypewriter(target) {
   typewriterTimers.set(target, timer);
 }
 
-function formatMemoBlock(memo, title = '내용') {
-  if (!memo) return '';
-  const normalized = String(memo).replace(/\r\n/g, '\n').trim();
+function formatBookDetails(book) {
+  const blocks = [
+    formatCollapsibleBlock(book.memo, '책 내용 보기', '책 내용', true),
+    formatCollapsibleBlock(book.toc, '목차 보기', '목차', false)
+  ].filter(Boolean);
+
+  if (!blocks.length) return '';
+  return `<div class="book-detail-toggles">${blocks.join('')}</div>`;
+}
+
+function formatCollapsibleBlock(content, buttonLabel, title = '내용', useTypewriter = false) {
+  if (!content) return '';
+  const normalized = String(content).replace(/\r\n/g, '\n').trim();
   if (!normalized) return '';
+
+  const contentClass = useTypewriter ? 'book-memo-content typewriter-content' : 'book-memo-content';
+  const contentAttrs = useTypewriter
+    ? `data-typewriter-text="${escapeHtml(normalized)}"`
+    : '';
+  const contentHtml = useTypewriter
+    ? ''
+    : formatPlainTextContent(normalized);
 
   return `
     <details class="book-memo-details">
-      <summary class="book-memo-toggle">책 내용 보기</summary>
+      <summary class="book-memo-toggle">${escapeHtml(buttonLabel)}</summary>
       <section class="book-memo-card" aria-label="${escapeHtml(title)}">
-        <div class="book-memo-content typewriter-content" data-typewriter-text="${escapeHtml(normalized)}"></div>
+        <p class="book-memo-label">${escapeHtml(title)}</p>
+        <div class="${contentClass}" ${contentAttrs}>${contentHtml}</div>
       </section>
     </details>
   `;
+}
+
+function formatPlainTextContent(value) {
+  return String(value)
+    .split(/\n{2,}/)
+    .map(paragraph => `<p>${escapeHtml(paragraph).replace(/\n/g, '<br>')}</p>`)
+    .join('');
 }
 
 function getBook(bookId) {

@@ -667,3 +667,41 @@ body {
 .dashboard-panel .book-memo-details {
   margin-top: 16px;
 }
+
+
+/* 2026-05-15 patch: book content + TOC side-by-side controls */
+.book-detail-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.book-detail-toggles .book-memo-details {
+  margin-top: 0;
+}
+
+.book-detail-toggles .book-memo-details[open] {
+  flex-basis: 100%;
+}
+
+.book-detail-toggles .book-memo-card {
+  width: 100%;
+}
+
+.book-detail-toggles .book-memo-label {
+  display: block;
+}
+
+@media (max-width: 640px) {
+  .book-detail-toggles {
+    gap: 8px;
+  }
+
+  .book-memo-toggle {
+    min-height: 36px;
+    padding: 0 12px;
+    font-size: 12px;
+  }
+}

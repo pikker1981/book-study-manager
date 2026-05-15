@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Book Study Manager</title>
-  <link rel="stylesheet" href="./style.css?v=20260515-5" />
+  <link rel="stylesheet" href="./style.css?v=20260515-6" />
 </head>
 <body>
 
@@ -143,8 +143,12 @@
           <input name="coverImage" placeholder="선택 입력" />
         </div>
         <div class="form-row full">
-          <label>메모</label>
-          <textarea name="memo" rows="4" placeholder="이번 책을 읽는 이유나 범위를 적어두세요."></textarea>
+          <label>책 내용</label>
+          <textarea name="memo" rows="5" placeholder="책 소개, 읽을 범위, 핵심 메모를 적어두세요."></textarea>
+        </div>
+        <div class="form-row full">
+          <label>목차</label>
+          <textarea name="toc" rows="5" placeholder="예: 1장 시작하는 사람들&#10;2장 함께 읽는 시간&#10;3장 다음 질문"></textarea>
         </div>
         <div class="form-row">
           <label>상태</label>
@@ -242,6 +246,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="./config.js?v=20260515-4"></script>
-  <script src="./script.js?v=20260515-5"></script>
+  <script src="./script.js?v=20260515-6"></script>
 </body>
 </html>
