@@ -513,29 +513,52 @@ body {
   }
 }
 
-/* Image fit correction: keep uploaded book covers fully visible */
-.feature-panel > img,
-.feature-panel img,
-.book-card > img.book-cover,
-img.book-cover {
-  width: 100% !important;
-  height: auto !important;
-  max-height: none !important;
-  aspect-ratio: auto !important;
-  object-fit: contain !important;
-  object-position: center center !important;
-  display: block !important;
-  background: var(--soft) !important;
+/* 2026-05-15 patch: readable book memo layout */
+.book-memo-card {
+  margin-top: 14px;
+  padding: 14px 16px 15px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  background: var(--bg);
 }
 
-/* Keep dashboard cover from becoming excessively tall on large images */
-.feature-panel > img,
-.feature-panel img {
-  max-height: 360px !important;
+.book-memo-label {
+  margin: 0 0 8px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
 }
 
-/* Keep book-list covers consistent while preserving the full image */
-.book-card > img.book-cover,
-img.book-cover {
-  max-height: 420px !important;
+.book-memo-content {
+  display: grid;
+  gap: 8px;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.65;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.book-memo-content p {
+  margin: 0;
+}
+
+.book-card .book-memo-card {
+  margin-top: 16px;
+}
+
+.dashboard-panel .book-memo-card {
+  margin-top: 16px;
+}
+
+@media (max-width: 768px) {
+  .book-memo-card {
+    padding: 12px 13px 13px;
+  }
+
+  .book-memo-content {
+    font-size: 13px;
+    line-height: 1.6;
+  }
 }

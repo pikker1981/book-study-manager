@@ -166,7 +166,7 @@ function renderDashboard() {
         <p class="panel-meta">현재 읽는 책</p>
         <h2>${escapeHtml(currentBook.title)}</h2>
         <p class="card-body">${escapeHtml(currentBook.author)}</p>
-        ${currentBook.memo ? `<p class="card-meta book-detail-line">${escapeHtml(currentBook.memo)}</p>` : ''}
+        ${formatMemoBlock(currentBook.memo, '책 내용')}
       </div>
       <div class="panel-footer-actions">
         <p class="card-meta">${formatDate(currentBook.startDate)} - ${formatDate(currentBook.endDate)}</p>
@@ -239,7 +239,7 @@ function renderBooks() {
         <h2 class="card-title">${escapeHtml(book.title)}</h2>
         <p class="card-body">${escapeHtml(book.author)}</p>
         <p class="card-meta">${book.status === 'reading' ? '읽는 중' : '완료'} · ${formatDate(book.startDate)} - ${formatDate(book.endDate)}</p>
-        ${book.memo ? `<p class="card-meta book-detail-line">${escapeHtml(book.memo)}</p>` : ''}
+        ${formatMemoBlock(book.memo, '책 내용')}
       </div>
       <div class="card-actions">
         <button class="btn btn-secondary" onclick="editBook('${book.id}')">내용 수정</button>
@@ -601,6 +601,25 @@ function mapAttendanceFromDb(row) {
     status: row.status,
     memo: row.memo || ''
   };
+}
+
+function formatMemoBlock(memo, title = '내용') {
+  if (!memo) return '';
+  const normalized = String(memo).replace(/\r\n/g, '\n').trim();
+  if (!normalized) return '';
+  const paragraphs = normalized
+    .split(/\n{2,}/)
+    .map(block => block.trim())
+    .filter(Boolean)
+    .map(block => `<p>${escapeHtml(block).replace(/\n/g, '<br>')}</p>`)
+    .join('');
+
+  return `
+    <section class="book-memo-card" aria-label="${escapeHtml(title)}">
+      <p class="book-memo-label">${escapeHtml(title)}</p>
+      <div class="book-memo-content">${paragraphs}</div>
+    </section>
+  `;
 }
 
 function getBook(bookId) {
