@@ -779,3 +779,21 @@ body {
 #currentBookPanel .book-placeholder {
   background: rgba(255, 255, 255, 0.62);
 }
+
+/* 2026-05-15 patch: visually remove plain white book-cover backgrounds */
+.book-cover {
+  background: transparent !important;
+  mix-blend-mode: multiply;
+  filter: contrast(1.02) saturate(1.02);
+}
+
+.book-card,
+.dashboard-panel,
+#currentBookPanel {
+  isolation: isolate;
+}
+
+.book-cover-wrap,
+.book-image-frame {
+  background: transparent !important;
+}
