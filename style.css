@@ -112,7 +112,8 @@ h3 { margin-bottom: 0; font-size: 18px; line-height: 1.36; font-weight: 700; }
 .feature-panel img {
   width: 100%;
   height: 220px;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
   display: block;
   margin-bottom: 20px;
   background: var(--soft);
@@ -162,7 +163,8 @@ h3 { margin-bottom: 0; font-size: 18px; line-height: 1.36; font-weight: 700; }
   width: 100%;
   aspect-ratio: 3 / 4;
   background: var(--soft);
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
   display: block;
 }
 .book-placeholder {
@@ -509,4 +511,31 @@ body {
     grid-template-columns: 1fr;
     gap: 2px;
   }
+}
+
+/* Image fit correction: keep uploaded book covers fully visible */
+.feature-panel > img,
+.feature-panel img,
+.book-card > img.book-cover,
+img.book-cover {
+  width: 100% !important;
+  height: auto !important;
+  max-height: none !important;
+  aspect-ratio: auto !important;
+  object-fit: contain !important;
+  object-position: center center !important;
+  display: block !important;
+  background: var(--soft) !important;
+}
+
+/* Keep dashboard cover from becoming excessively tall on large images */
+.feature-panel > img,
+.feature-panel img {
+  max-height: 360px !important;
+}
+
+/* Keep book-list covers consistent while preserving the full image */
+.book-card > img.book-cover,
+img.book-cover {
+  max-height: 420px !important;
 }
