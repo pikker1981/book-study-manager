@@ -216,6 +216,10 @@ function renderDashboard() {
   const activeMembers = state.members.filter(member => member.status === 'active').length;
   const visibleMembers = state.members.slice(0, 6);
   const hiddenCount = Math.max(totalMembers - visibleMembers.length, 0);
+  const nextMeetingAttendeeIds = nextMeeting
+    ? new Set(getMeetingAttendance(nextMeeting.id).filter(item => item.status === 'attend').map(item => item.memberId))
+    : new Set();
+
   attendancePanel.innerHTML = `
     <div>
       <p class="panel-meta">멤버 현황</p>
@@ -223,12 +227,16 @@ function renderDashboard() {
       <p class="card-body">활동 중인 멤버</p>
       ${visibleMembers.length ? `
         <div class="member-mini-list">
-          ${visibleMembers.map(member => `
-            <div class="member-mini-item">
-              <span class="member-name-accent">${escapeHtml(member.name)}</span>
-              <span class="member-phone-accent">${escapeHtml(member.phone || '연락처 없음')}</span>
-            </div>
-          `).join('')}
+          ${visibleMembers.map(member => {
+            const isAttending = nextMeetingAttendeeIds.has(member.id);
+            return `
+              <div class="member-mini-item${isAttending ? ' is-attending' : ''}">
+                <span class="member-name-accent">${escapeHtml(member.name)}</span>
+                <span class="member-phone-accent">${escapeHtml(member.phone || '연락처 없음')}</span>
+                ${isAttending ? '<span class="member-attend-badge">참여</span>' : ''}
+              </div>
+            `;
+          }).join('')}
         </div>
       ` : `<p class="card-meta book-detail-line">등록된 멤버가 없어요.</p>`}
     </div>

@@ -705,3 +705,42 @@ body {
     font-size: 12px;
   }
 }
+
+/* 2026-05-15 patch: mark next-meeting attendees in member status box */
+.member-mini-item.is-attending {
+  position: relative;
+  padding: 10px 12px 10px 14px;
+  border: 1px solid rgba(255, 0, 60, 0.28);
+  background: rgba(255, 0, 60, 0.035);
+}
+
+.member-mini-item.is-attending::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 18px;
+  height: 18px;
+  border-top: 3px solid var(--danger);
+  border-left: 3px solid var(--danger);
+  pointer-events: none;
+}
+
+.member-attend-badge {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--danger);
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .member-mini-item.is-attending {
+    padding-left: 14px;
+  }
+
+  .member-attend-badge {
+    margin-left: 0;
+  }
+}
