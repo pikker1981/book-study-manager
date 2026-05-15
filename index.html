@@ -7,7 +7,28 @@
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
-  <div class="app-shell">
+  <div id="authScreen" class="auth-screen">
+    <form id="loginForm" class="auth-card">
+      <p class="eyebrow">Book Study</p>
+      <h1>관리자 로그인</h1>
+      <p class="lead">Supabase에 저장된 책, 멤버, 일정, 참석 정보를 불러옵니다.</p>
+      <div id="configWarning" class="notice warning" hidden>config.js에 Supabase URL과 Key를 먼저 입력하세요.</div>
+      <div class="form-row full">
+        <label>이메일</label>
+        <input name="email" type="email" autocomplete="email" required placeholder="관리자 이메일" />
+      </div>
+      <div class="form-row full">
+        <label>비밀번호</label>
+        <input name="password" type="password" autocomplete="current-password" required placeholder="Supabase Auth 비밀번호" />
+      </div>
+      <button class="btn btn-primary auth-submit" type="submit">로그인</button>
+      <p id="authMessage" class="form-help"></p>
+    </form>
+  </div>
+
+  <div id="loadingScreen" class="loading-screen" hidden>데이터를 불러오는 중입니다.</div>
+
+  <div class="app-shell" id="appShell" hidden>
     <header class="app-header">
       <div class="brand">
         <a href="#dashboard" class="brand-mark" aria-label="Book Study Manager 홈">Book Study</a>
@@ -20,6 +41,7 @@
         <a href="#meetings" data-nav="meetings">Meetings</a>
         <a href="#attendance" data-nav="attendance">Attendance</a>
       </nav>
+      <button class="btn btn-secondary header-logout" id="logoutButton" type="button">로그아웃</button>
     </header>
 
     <main class="page-container">
@@ -157,9 +179,9 @@
           <label>연락처</label>
           <input name="phone" placeholder="선택 입력" />
         </div>
-        <div class="form-row full">
-          <label>메모</label>
-          <textarea name="memo" rows="3" placeholder="운영 참고사항을 적어두세요."></textarea>
+        <div class="form-row">
+          <label>가입일</label>
+          <input name="joinedAt" type="date" />
         </div>
         <div class="form-row">
           <label>상태</label>
@@ -167,6 +189,10 @@
             <option value="active">활동 중</option>
             <option value="inactive">비활성</option>
           </select>
+        </div>
+        <div class="form-row full">
+          <label>메모</label>
+          <textarea name="memo" rows="3" placeholder="운영 참고사항을 적어두세요."></textarea>
         </div>
       </div>
       <div class="modal-actions">
@@ -216,6 +242,8 @@
     </form>
   </dialog>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./config.js"></script>
   <script src="./script.js"></script>
 </body>
 </html>

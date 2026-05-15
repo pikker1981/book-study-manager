@@ -1,70 +1,152 @@
-const STORAGE_KEY = 'book-study-manager-v1';
+const config = window.BOOK_STUDY_CONFIG || {};
+const hasSupabaseConfig = Boolean(
+  config.SUPABASE_URL &&
+  config.SUPABASE_ANON_KEY &&
+  !config.SUPABASE_URL.includes('YOUR_PROJECT_ID') &&
+  !config.SUPABASE_ANON_KEY.includes('YOUR_SUPABASE')
+);
 
-const initialState = {
-  books: [
-    {
-      id: crypto.randomUUID(),
-      title: '지구 끝의 온실',
-      author: '김초엽',
-      coverImage: '',
-      startDate: '2026-05-01',
-      endDate: '2026-05-31',
-      status: 'reading',
-      memo: '5월 독서모임 선정 도서'
-    }
-  ],
-  members: [
-    { id: crypto.randomUUID(), name: '김하은', phone: '', memo: '운영자', status: 'active', joinedAt: '2026-05-01' },
-    { id: crypto.randomUUID(), name: '이서연', phone: '', memo: '', status: 'active', joinedAt: '2026-05-01' },
-    { id: crypto.randomUUID(), name: '박민준', phone: '', memo: '', status: 'active', joinedAt: '2026-05-01' }
-  ],
+const db = hasSupabaseConfig
+  ? window.supabase.createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY)
+  : null;
+
+let state = {
+  books: [],
+  members: [],
   meetings: [],
   attendance: []
 };
 
-let state = loadState();
-bootstrapSampleMeeting();
+let currentUser = null;
 
-function loadState() {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (!saved) return structuredClone(initialState);
-  try {
-    return JSON.parse(saved);
-  } catch {
-    return structuredClone(initialState);
+const $ = selector => document.querySelector(selector);
+const $$ = selector => Array.from(document.querySelectorAll(selector));
+
+init();
+
+async function init() {
+  bindEvents();
+  showConfigWarningIfNeeded();
+
+  if (!db) {
+    showAuth();
+    return;
+  }
+
+  const { data } = await db.auth.getSession();
+  if (data?.session?.user) {
+    currentUser = data.session.user;
+    await enterApp();
+  } else {
+    showAuth();
   }
 }
 
-function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-}
+function bindEvents() {
+  window.addEventListener('hashchange', renderNavigation);
 
-function bootstrapSampleMeeting() {
-  if (state.meetings.length > 0 || state.books.length === 0) return;
-  state.meetings.push({
-    id: crypto.randomUUID(),
-    bookId: state.books[0].id,
-    title: '1회차 독서모임',
-    date: '2026-05-18',
-    time: '19:30',
-    location: '온라인',
-    memo: '1부를 읽고 인상 깊은 문장을 가져옵니다.'
+  $('#loginForm')?.addEventListener('submit', handleLogin);
+  $('#logoutButton')?.addEventListener('click', handleLogout);
+
+  $$('[data-open-modal]').forEach(button => {
+    button.addEventListener('click', () => openCreateModal(button.dataset.openModal));
   });
-  saveState();
+
+  $$('[data-close-modal]').forEach(button => {
+    button.addEventListener('click', () => closeModal(button.dataset.closeModal));
+  });
+
+  $('#bookForm')?.addEventListener('submit', handleBookSubmit);
+  $('#memberForm')?.addEventListener('submit', handleMemberSubmit);
+  $('#meetingForm')?.addEventListener('submit', handleMeetingSubmit);
+  $('#attendanceMeetingSelect')?.addEventListener('change', renderAttendance);
 }
 
-function formatDate(dateString) {
-  if (!dateString) return '-';
-  const date = new Date(`${dateString}T00:00:00`);
-  return new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }).format(date);
+function showConfigWarningIfNeeded() {
+  const warning = $('#configWarning');
+  if (warning) warning.hidden = hasSupabaseConfig;
 }
 
-function getBook(bookId) {
-  return state.books.find(book => book.id === bookId);
+async function handleLogin(event) {
+  event.preventDefault();
+  if (!db) return setAuthMessage('config.js 설정이 필요합니다.');
+
+  const form = event.currentTarget;
+  const email = form.email.value.trim();
+  const password = form.password.value;
+
+  setAuthMessage('로그인 중입니다.');
+  const { data, error } = await db.auth.signInWithPassword({ email, password });
+  if (error) {
+    setAuthMessage(`로그인 실패: ${error.message}`);
+    return;
+  }
+
+  currentUser = data.user;
+  setAuthMessage('');
+  await enterApp();
 }
 
-function getMeetingAttendance(meetingId) {
-  return state.attendance.filter(item => item.meetingId === meetingId);
+async function handleLogout() {
+  if (!db) return;
+  await db.auth.signOut();
+  currentUser = null;
+  state = { books: [], members: [], meetings: [], attendance: [] };
+  showAuth();
+}
+
+async function enterApp() {
+  showLoading(true);
+  try {
+    await loadAll();
+    $('#authScreen').hidden = true;
+    $('#appShell').hidden = false;
+    showLoading(false);
+    render();
+  } catch (error) {
+    showLoading(false);
+    showAuth();
+    setAuthMessage(`데이터 로딩 실패: ${error.message}`);
+  }
+}
+
+function showAuth() {
+  $('#authScreen').hidden = false;
+  $('#appShell').hidden = true;
+  showLoading(false);
+}
+
+function showLoading(visible) {
+  const loading = $('#loadingScreen');
+  if (loading) loading.hidden = !visible;
+}
+
+function setAuthMessage(message) {
+  const target = $('#authMessage');
+  if (target) target.textContent = message;
+}
+
+async function loadAll() {
+  const [books, members, meetings, attendance] = await Promise.all([
+    selectTable('books', 'created_at', true),
+    selectTable('members', 'name', false),
+    selectTable('meetings', 'meeting_date', false),
+    selectTable('attendance', 'created_at', true)
+  ]);
+
+  state.books = books.map(mapBookFromDb);
+  state.members = members.map(mapMemberFromDb);
+  state.meetings = meetings.map(mapMeetingFromDb);
+  state.attendance = attendance.map(mapAttendanceFromDb);
+}
+
+async function selectTable(table, orderColumn, ascending) {
+  const { data, error } = await db
+    .from(table)
+    .select('*')
+    .order(orderColumn, { ascending });
+  if (error) throw error;
+  return data || [];
 }
 
 function render() {
@@ -80,22 +162,19 @@ function render() {
 
 function renderNavigation() {
   const hash = location.hash.replace('#', '') || 'dashboard';
-  document.querySelectorAll('.view').forEach(view => {
-    view.classList.toggle('active', view.dataset.view === hash);
-  });
-  document.querySelectorAll('[data-nav]').forEach(link => {
-    link.classList.toggle('active', link.dataset.nav === hash);
-  });
+  $$('.view').forEach(view => view.classList.toggle('active', view.dataset.view === hash));
+  $$('[data-nav]').forEach(link => link.classList.toggle('active', link.dataset.nav === hash));
 }
 
 function renderDashboard() {
   const currentBook = state.books.find(book => book.status === 'reading') || state.books[0];
-  const sortedMeetings = [...state.meetings].sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`));
-  const nextMeeting = sortedMeetings.find(meeting => new Date(`${meeting.date}T${meeting.time}`) >= new Date()) || sortedMeetings[0];
+  const sortedMeetings = [...state.meetings].sort((a, b) => `${a.date}T${a.time || '00:00'}`.localeCompare(`${b.date}T${b.time || '00:00'}`));
+  const now = new Date();
+  const nextMeeting = sortedMeetings.find(meeting => new Date(`${meeting.date}T${meeting.time || '00:00'}`) >= now) || sortedMeetings[0];
 
-  const currentBookPanel = document.querySelector('#currentBookPanel');
-  const nextMeetingPanel = document.querySelector('#nextMeetingPanel');
-  const attendancePanel = document.querySelector('#attendancePanel');
+  const currentBookPanel = $('#currentBookPanel');
+  const nextMeetingPanel = $('#nextMeetingPanel');
+  const attendancePanel = $('#attendancePanel');
 
   if (currentBook) {
     currentBookPanel.innerHTML = `
@@ -118,7 +197,7 @@ function renderDashboard() {
       <div>
         <p class="panel-meta">다음 모임</p>
         <h2>${escapeHtml(nextMeeting.title)}</h2>
-        <p class="card-body">${formatDate(nextMeeting.date)} ${nextMeeting.time}</p>
+        <p class="card-body">${formatDate(nextMeeting.date)} ${nextMeeting.time || ''}</p>
         <p class="card-meta">${escapeHtml(nextMeeting.location || '장소 미정')}</p>
       </div>
       <p class="card-meta">참석 예정 ${attendCount}명 / 전체 ${state.members.length}명</p>
@@ -140,11 +219,12 @@ function renderDashboard() {
 }
 
 function renderBooks() {
-  const container = document.querySelector('#bookList');
-  if (state.books.length === 0) {
+  const container = $('#bookList');
+  if (!state.books.length) {
     container.innerHTML = `<div class="empty-state">아직 등록된 책이 없어요.</div>`;
     return;
   }
+
   container.innerHTML = state.books.map(book => `
     <article class="book-card">
       ${book.coverImage ? `<img class="book-cover" src="${escapeHtml(book.coverImage)}" alt="${escapeHtml(book.title)} 표지" />` : `<div class="book-placeholder">${escapeHtml(book.title)}</div>`}
@@ -162,16 +242,17 @@ function renderBooks() {
 }
 
 function renderMembers() {
-  const container = document.querySelector('#memberList');
-  if (state.members.length === 0) {
+  const container = $('#memberList');
+  if (!state.members.length) {
     container.innerHTML = `<div class="empty-state">아직 등록된 멤버가 없어요.</div>`;
     return;
   }
+
   container.innerHTML = state.members.map(member => `
     <div class="list-row">
       <div>
         <p class="row-title">${escapeHtml(member.name)}</p>
-        <p class="row-sub">${escapeHtml(member.phone || '연락처 없음')} · ${member.status === 'active' ? '활동 중' : '비활성'} · ${member.joinedAt}</p>
+        <p class="row-sub">${escapeHtml(member.phone || '연락처 없음')} · ${member.status === 'active' ? '활동 중' : '비활성'} · ${member.joinedAt || '-'}</p>
       </div>
       <div class="row-actions">
         <button class="btn btn-secondary" onclick="editMember('${member.id}')">수정</button>
@@ -182,12 +263,13 @@ function renderMembers() {
 }
 
 function renderMeetings() {
-  const container = document.querySelector('#meetingList');
-  if (state.meetings.length === 0) {
+  const container = $('#meetingList');
+  if (!state.meetings.length) {
     container.innerHTML = `<div class="empty-state">아직 등록된 일정이 없어요.</div>`;
     return;
   }
-  const meetings = [...state.meetings].sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`));
+
+  const meetings = [...state.meetings].sort((a, b) => `${a.date}T${a.time || '00:00'}`.localeCompare(`${b.date}T${b.time || '00:00'}`));
   container.innerHTML = meetings.map(meeting => {
     const book = getBook(meeting.bookId);
     const attendance = getMeetingAttendance(meeting.id);
@@ -196,7 +278,7 @@ function renderMeetings() {
       <div class="list-row">
         <div>
           <p class="row-title">${escapeHtml(meeting.title)}</p>
-          <p class="row-sub">${formatDate(meeting.date)} ${meeting.time} · ${escapeHtml(meeting.location || '장소 미정')} · ${escapeHtml(book?.title || '책 없음')}</p>
+          <p class="row-sub">${formatDate(meeting.date)} ${meeting.time || ''} · ${escapeHtml(meeting.location || '장소 미정')} · ${escapeHtml(book?.title || '책 없음')}</p>
           <p class="row-sub">참석 ${attendCount}명 / 전체 ${state.members.length}명</p>
         </div>
         <div class="row-actions">
@@ -209,36 +291,39 @@ function renderMeetings() {
 }
 
 function renderMeetingBookOptions() {
-  const select = document.querySelector('#meetingBookSelect');
+  const select = $('#meetingBookSelect');
+  if (!select) return;
   select.innerHTML = state.books.length
     ? state.books.map(book => `<option value="${book.id}">${escapeHtml(book.title)}</option>`).join('')
     : `<option value="" disabled selected>먼저 책을 등록하세요</option>`;
 }
 
 function renderAttendanceSelector() {
-  const select = document.querySelector('#attendanceMeetingSelect');
-  if (state.meetings.length === 0) {
+  const select = $('#attendanceMeetingSelect');
+  if (!select) return;
+
+  if (!state.meetings.length) {
     select.innerHTML = `<option value="">등록된 일정이 없어요</option>`;
     return;
   }
+
   const currentValue = select.value;
-  select.innerHTML = state.meetings.map(meeting => `<option value="${meeting.id}">${formatDate(meeting.date)} · ${escapeHtml(meeting.title)}</option>`).join('');
-  if (currentValue && state.meetings.some(meeting => meeting.id === currentValue)) {
-    select.value = currentValue;
-  }
+  select.innerHTML = state.meetings
+    .sort((a, b) => `${a.date}T${a.time || '00:00'}`.localeCompare(`${b.date}T${b.time || '00:00'}`))
+    .map(meeting => `<option value="${meeting.id}">${formatDate(meeting.date)} · ${escapeHtml(meeting.title)}</option>`)
+    .join('');
+
+  if (currentValue && state.meetings.some(meeting => meeting.id === currentValue)) select.value = currentValue;
 }
 
 function renderAttendance() {
-  const container = document.querySelector('#attendanceList');
-  const select = document.querySelector('#attendanceMeetingSelect');
-  const meetingId = select.value || state.meetings[0]?.id;
+  const container = $('#attendanceList');
+  const select = $('#attendanceMeetingSelect');
+  if (!container || !select) return;
 
-  if (!meetingId) {
-    container.innerHTML = `<div class="empty-state">참여 여부를 확인할 일정이 없어요.</div>`;
-    return;
-  }
-  if (state.members.length === 0) {
-    container.innerHTML = `<div class="empty-state">참여 여부를 확인할 멤버가 없어요.</div>`;
+  const meetingId = select.value;
+  if (!meetingId || !state.members.length) {
+    container.innerHTML = `<div class="empty-state">참석을 체크할 일정 또는 멤버가 없어요.</div>`;
     return;
   }
 
@@ -261,169 +346,273 @@ function renderAttendance() {
   }).join('');
 }
 
-function statusLabel(status) {
-  return { attend: '참석', absent: '불참', pending: '미정' }[status] || '미정';
+async function handleBookSubmit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const payload = {
+    title: form.title.value.trim(),
+    author: form.author.value.trim(),
+    cover_image: form.coverImage.value.trim() || null,
+    start_date: form.startDate.value || null,
+    end_date: form.endDate.value || null,
+    status: form.status.value,
+    memo: form.memo.value.trim() || null
+  };
+
+  if (!payload.title || !payload.author) return alert('책 제목과 저자는 필수입니다.');
+  await upsertRow('books', form.id.value, payload);
+  closeModal('bookModal');
+  await refreshAndRender();
 }
 
-function upsertAttendance(meetingId, memberId, status) {
-  const existing = state.attendance.find(item => item.meetingId === meetingId && item.memberId === memberId);
-  if (existing) {
-    existing.status = status;
+async function handleMemberSubmit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const payload = {
+    name: form.name.value.trim(),
+    phone: form.phone.value.trim() || null,
+    status: form.status.value,
+    joined_at: form.joinedAt.value || new Date().toISOString().slice(0, 10),
+    memo: form.memo.value.trim() || null
+  };
+
+  if (!payload.name) return alert('이름은 필수입니다.');
+  await upsertRow('members', form.id.value, payload);
+  closeModal('memberModal');
+  await refreshAndRender();
+}
+
+async function handleMeetingSubmit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const payload = {
+    book_id: form.bookId.value || null,
+    title: form.title.value.trim(),
+    meeting_date: form.date.value,
+    meeting_time: form.time.value || null,
+    location: form.location.value.trim() || null,
+    memo: form.memo.value.trim() || null
+  };
+
+  if (!payload.title || !payload.meeting_date) return alert('모임 제목과 날짜는 필수입니다.');
+  await upsertRow('meetings', form.id.value, payload);
+  closeModal('meetingModal');
+  await refreshAndRender();
+}
+
+async function upsertRow(table, id, payload) {
+  let query;
+  if (id) {
+    query = db.from(table).update(payload).eq('id', id).select().single();
   } else {
-    state.attendance.push({ id: crypto.randomUUID(), meetingId, memberId, status });
+    query = db.from(table).insert(payload).select().single();
   }
+  const { error } = await query;
+  if (error) throwAndAlert(error);
 }
 
-window.setAttendance = function(meetingId, memberId, status) {
-  upsertAttendance(meetingId, memberId, status);
-  saveState();
+async function deleteRow(table, id) {
+  const { error } = await db.from(table).delete().eq('id', id);
+  if (error) throwAndAlert(error);
+}
+
+async function refreshAndRender() {
+  await loadAll();
   render();
+}
+
+window.editBook = function editBook(id) {
+  const book = state.books.find(item => item.id === id);
+  if (!book) return;
+  const form = $('#bookForm');
+  form.id.value = book.id;
+  form.title.value = book.title;
+  form.author.value = book.author;
+  form.coverImage.value = book.coverImage || '';
+  form.startDate.value = book.startDate || '';
+  form.endDate.value = book.endDate || '';
+  form.status.value = book.status;
+  form.memo.value = book.memo || '';
+  openModal('bookModal', '책 수정');
 };
 
-function setupModalTriggers() {
-  document.querySelectorAll('[data-open-modal]').forEach(button => {
-    button.addEventListener('click', () => {
-      const modalId = button.dataset.openModal;
-      const modal = document.querySelector(`#${modalId}`);
-      if (modalId === 'bookModal') resetBookForm();
-      if (modalId === 'memberModal') resetMemberForm();
-      if (modalId === 'meetingModal') resetMeetingForm();
-      modal.showModal();
-    });
-  });
-  document.querySelectorAll('[data-close-modal]').forEach(button => {
-    button.addEventListener('click', () => document.querySelector(`#${button.dataset.closeModal}`).close());
-  });
+window.deleteBook = async function deleteBook(id) {
+  if (!confirm('이 책을 삭제할까요? 관련 일정의 책 연결이 해제될 수 있습니다.')) return;
+  await deleteRow('books', id);
+  await refreshAndRender();
+};
+
+window.editMember = function editMember(id) {
+  const member = state.members.find(item => item.id === id);
+  if (!member) return;
+  const form = $('#memberForm');
+  form.id.value = member.id;
+  form.name.value = member.name;
+  form.phone.value = member.phone || '';
+  form.status.value = member.status;
+  form.joinedAt.value = member.joinedAt || '';
+  form.memo.value = member.memo || '';
+  openModal('memberModal', '멤버 수정');
+};
+
+window.deleteMember = async function deleteMember(id) {
+  if (!confirm('이 멤버를 삭제할까요? 참석 기록도 함께 삭제됩니다.')) return;
+  await deleteRow('members', id);
+  await refreshAndRender();
+};
+
+window.editMeeting = function editMeeting(id) {
+  const meeting = state.meetings.find(item => item.id === id);
+  if (!meeting) return;
+  const form = $('#meetingForm');
+  form.id.value = meeting.id;
+  form.bookId.value = meeting.bookId || '';
+  form.title.value = meeting.title;
+  form.date.value = meeting.date || '';
+  form.time.value = meeting.time || '';
+  form.location.value = meeting.location || '';
+  form.memo.value = meeting.memo || '';
+  openModal('meetingModal', '일정 수정');
+};
+
+window.deleteMeeting = async function deleteMeeting(id) {
+  if (!confirm('이 일정을 삭제할까요? 참석 기록도 함께 삭제됩니다.')) return;
+  await deleteRow('meetings', id);
+  await refreshAndRender();
+};
+
+window.setAttendance = async function setAttendance(meetingId, memberId, status) {
+  const existing = state.attendance.find(item => item.meetingId === meetingId && item.memberId === memberId);
+  const payload = {
+    meeting_id: meetingId,
+    member_id: memberId,
+    status
+  };
+
+  let query;
+  if (existing) {
+    query = db.from('attendance').update({ status }).eq('id', existing.id).select().single();
+  } else {
+    query = db.from('attendance').insert(payload).select().single();
+  }
+
+  const { error } = await query;
+  if (error) throwAndAlert(error);
+  await refreshAndRender();
+};
+
+function openCreateModal(modalId) {
+  if (modalId === 'bookModal') resetBookForm();
+  if (modalId === 'memberModal') resetMemberForm();
+  if (modalId === 'meetingModal') resetMeetingForm();
+  openModal(modalId);
+}
+
+function openModal(modalId, title) {
+  const modal = $(`#${modalId}`);
+  if (!modal) return;
+  if (title) modal.querySelector('.modal-header h2').textContent = title;
+  modal.showModal();
+}
+
+function closeModal(modalId) {
+  const modal = $(`#${modalId}`);
+  if (modal?.open) modal.close();
 }
 
 function resetBookForm() {
-  const form = document.querySelector('#bookForm');
+  const form = $('#bookForm');
   form.reset();
-  form.elements.id.value = '';
-  form.elements.status.value = 'reading';
+  form.id.value = '';
+  form.status.value = 'reading';
+  $('#bookModal .modal-header h2').textContent = '책 등록';
 }
 
 function resetMemberForm() {
-  const form = document.querySelector('#memberForm');
+  const form = $('#memberForm');
   form.reset();
-  form.elements.id.value = '';
-  form.elements.status.value = 'active';
+  form.id.value = '';
+  form.status.value = 'active';
+  form.joinedAt.value = new Date().toISOString().slice(0, 10);
+  $('#memberModal .modal-header h2').textContent = '멤버 추가';
 }
 
 function resetMeetingForm() {
-  const form = document.querySelector('#meetingForm');
+  const form = $('#meetingForm');
   form.reset();
-  form.elements.id.value = '';
+  form.id.value = '';
   renderMeetingBookOptions();
+  $('#meetingModal .modal-header h2').textContent = '일정 추가';
 }
 
-function setupForms() {
-  document.querySelector('#bookForm').addEventListener('submit', event => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const formData = Object.fromEntries(new FormData(form).entries());
-    if (formData.id) {
-      const book = state.books.find(item => item.id === formData.id);
-      Object.assign(book, formData);
-    } else {
-      state.books.push({ ...formData, id: crypto.randomUUID() });
-    }
-    saveState();
-    document.querySelector('#bookModal').close();
-    render();
-  });
-
-  document.querySelector('#memberForm').addEventListener('submit', event => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const formData = Object.fromEntries(new FormData(form).entries());
-    if (formData.id) {
-      const member = state.members.find(item => item.id === formData.id);
-      Object.assign(member, formData);
-    } else {
-      state.members.push({ ...formData, id: crypto.randomUUID(), joinedAt: new Date().toISOString().slice(0, 10) });
-    }
-    saveState();
-    document.querySelector('#memberModal').close();
-    render();
-  });
-
-  document.querySelector('#meetingForm').addEventListener('submit', event => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const formData = Object.fromEntries(new FormData(form).entries());
-    if (formData.id) {
-      const meeting = state.meetings.find(item => item.id === formData.id);
-      Object.assign(meeting, formData);
-    } else {
-      state.meetings.push({ ...formData, id: crypto.randomUUID() });
-    }
-    saveState();
-    document.querySelector('#meetingModal').close();
-    render();
-  });
-
-  document.querySelector('#attendanceMeetingSelect').addEventListener('change', renderAttendance);
+function mapBookFromDb(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    author: row.author,
+    coverImage: row.cover_image || '',
+    startDate: row.start_date || '',
+    endDate: row.end_date || '',
+    status: row.status,
+    memo: row.memo || ''
+  };
 }
 
-window.editBook = function(id) {
-  const book = state.books.find(item => item.id === id);
-  if (!book) return;
-  const form = document.querySelector('#bookForm');
-  resetBookForm();
-  Object.entries(book).forEach(([key, value]) => {
-    if (form.elements[key]) form.elements[key].value = value || '';
-  });
-  document.querySelector('#bookModal').showModal();
-};
+function mapMemberFromDb(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    phone: row.phone || '',
+    memo: row.memo || '',
+    status: row.status,
+    joinedAt: row.joined_at || ''
+  };
+}
 
-window.deleteBook = function(id) {
-  if (!confirm('이 책을 삭제할까요? 관련 일정도 함께 삭제됩니다.')) return;
-  const meetingIds = state.meetings.filter(meeting => meeting.bookId === id).map(meeting => meeting.id);
-  state.books = state.books.filter(book => book.id !== id);
-  state.meetings = state.meetings.filter(meeting => meeting.bookId !== id);
-  state.attendance = state.attendance.filter(item => !meetingIds.includes(item.meetingId));
-  saveState();
-  render();
-};
+function mapMeetingFromDb(row) {
+  return {
+    id: row.id,
+    bookId: row.book_id || '',
+    title: row.title,
+    date: row.meeting_date,
+    time: row.meeting_time ? row.meeting_time.slice(0, 5) : '',
+    location: row.location || '',
+    memo: row.memo || ''
+  };
+}
 
-window.editMember = function(id) {
-  const member = state.members.find(item => item.id === id);
-  if (!member) return;
-  const form = document.querySelector('#memberForm');
-  resetMemberForm();
-  Object.entries(member).forEach(([key, value]) => {
-    if (form.elements[key]) form.elements[key].value = value || '';
-  });
-  document.querySelector('#memberModal').showModal();
-};
+function mapAttendanceFromDb(row) {
+  return {
+    id: row.id,
+    meetingId: row.meeting_id,
+    memberId: row.member_id,
+    status: row.status,
+    memo: row.memo || ''
+  };
+}
 
-window.deleteMember = function(id) {
-  if (!confirm('이 멤버를 삭제할까요? 참석 기록도 함께 삭제됩니다.')) return;
-  state.members = state.members.filter(member => member.id !== id);
-  state.attendance = state.attendance.filter(item => item.memberId !== id);
-  saveState();
-  render();
-};
+function getBook(bookId) {
+  return state.books.find(book => book.id === bookId);
+}
 
-window.editMeeting = function(id) {
-  const meeting = state.meetings.find(item => item.id === id);
-  if (!meeting) return;
-  const form = document.querySelector('#meetingForm');
-  resetMeetingForm();
-  Object.entries(meeting).forEach(([key, value]) => {
-    if (form.elements[key]) form.elements[key].value = value || '';
-  });
-  document.querySelector('#meetingModal').showModal();
-};
+function getMeetingAttendance(meetingId) {
+  return state.attendance.filter(item => item.meetingId === meetingId);
+}
 
-window.deleteMeeting = function(id) {
-  if (!confirm('이 일정을 삭제할까요? 참석 기록도 함께 삭제됩니다.')) return;
-  state.meetings = state.meetings.filter(meeting => meeting.id !== id);
-  state.attendance = state.attendance.filter(item => item.meetingId !== id);
-  saveState();
-  render();
-};
+function statusLabel(status) {
+  return {
+    attend: '참석',
+    absent: '불참',
+    pending: '미정'
+  }[status] || '미정';
+}
+
+function formatDate(dateString) {
+  if (!dateString) return '-';
+  const date = new Date(`${dateString}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return dateString;
+  return new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }).format(date);
+}
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -434,7 +623,7 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
-window.addEventListener('hashchange', renderNavigation);
-setupModalTriggers();
-setupForms();
-render();
+function throwAndAlert(error) {
+  alert(`처리 실패: ${error.message}`);
+  throw error;
+}
