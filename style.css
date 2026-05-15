@@ -407,3 +407,28 @@ textarea { resize: vertical; }
 .full-width {
   width: 100%;
 }
+
+/* Layout fix: ensure hidden screens do not occupy viewport space */
+[hidden] {
+  display: none !important;
+}
+
+body {
+  min-height: 100vh;
+}
+
+.app-shell[hidden],
+.mobile-nav[hidden],
+.lock-screen[hidden],
+.loading-screen[hidden],
+.notice[hidden] {
+  display: none !important;
+}
+
+.loading-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  min-height: 100vh;
+  background: #ffffff;
+}
