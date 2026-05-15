@@ -617,3 +617,53 @@ body {
 .member-mini-item .member-phone-accent {
   color: var(--accent) !important;
 }
+
+/* 2026-05-15 patch: collapsible book content */
+.book-memo-details {
+  margin-top: 16px;
+}
+
+.book-memo-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  color: var(--accent);
+  background: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.book-memo-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.book-memo-toggle::after {
+  content: '+';
+  margin-left: 8px;
+  font-weight: 800;
+}
+
+.book-memo-details[open] > .book-memo-toggle::after {
+  content: '−';
+}
+
+.book-memo-details[open] > .book-memo-card {
+  margin-top: 10px;
+}
+
+.book-memo-details .book-memo-card {
+  margin-top: 0;
+}
+
+.book-card .book-memo-details,
+.dashboard-panel .book-memo-details {
+  margin-top: 16px;
+}

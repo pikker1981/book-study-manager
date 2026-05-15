@@ -614,36 +614,60 @@ function mapAttendanceFromDb(row) {
   };
 }
 
-let typewriterTimers = [];
+let typewriterTimers = new Map();
 
 function initTypewriterAnimations() {
   typewriterTimers.forEach(timer => clearInterval(timer));
-  typewriterTimers = [];
+  typewriterTimers = new Map();
 
-  const targets = $$('[data-typewriter-text]');
-  targets.forEach(target => {
-    const text = target.dataset.typewriterText || '';
-    if (!text) return;
+  const detailsList = $$('.book-memo-details');
+  detailsList.forEach(details => {
+    const target = details.querySelector('[data-typewriter-text]');
+    if (!target) return;
 
     target.textContent = '';
-    target.classList.add('is-typing');
+    target.dataset.typed = 'false';
+    target.classList.remove('is-typing');
 
-    let index = 0;
-    const step = text.length > 450 ? 3 : text.length > 220 ? 2 : 1;
-    const speed = text.length > 450 ? 8 : 13;
+    details.addEventListener('toggle', () => {
+      if (details.open) startTypewriter(target);
+    });
 
-    const timer = setInterval(() => {
-      index = Math.min(index + step, text.length);
-      target.textContent = text.slice(0, index);
-
-      if (index >= text.length) {
-        clearInterval(timer);
-        target.classList.remove('is-typing');
-      }
-    }, speed);
-
-    typewriterTimers.push(timer);
+    if (details.open) startTypewriter(target);
   });
+}
+
+function startTypewriter(target) {
+  const text = target.dataset.typewriterText || '';
+  if (!text || target.dataset.typed === 'true') return;
+
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  target.dataset.typed = 'true';
+  target.textContent = '';
+
+  if (reduceMotion) {
+    target.textContent = text;
+    return;
+  }
+
+  target.classList.add('is-typing');
+
+  let index = 0;
+  const step = text.length > 450 ? 3 : text.length > 220 ? 2 : 1;
+  const speed = text.length > 450 ? 8 : 13;
+
+  const timer = setInterval(() => {
+    index = Math.min(index + step, text.length);
+    target.textContent = text.slice(0, index);
+
+    if (index >= text.length) {
+      clearInterval(timer);
+      typewriterTimers.delete(target);
+      target.classList.remove('is-typing');
+    }
+  }, speed);
+
+  typewriterTimers.set(target, timer);
 }
 
 function formatMemoBlock(memo, title = '내용') {
@@ -652,10 +676,12 @@ function formatMemoBlock(memo, title = '내용') {
   if (!normalized) return '';
 
   return `
-    <section class="book-memo-card" aria-label="${escapeHtml(title)}">
-      <p class="book-memo-label">${escapeHtml(title)}</p>
-      <div class="book-memo-content typewriter-content" data-typewriter-text="${escapeHtml(normalized)}"></div>
-    </section>
+    <details class="book-memo-details">
+      <summary class="book-memo-toggle">책 내용 보기</summary>
+      <section class="book-memo-card" aria-label="${escapeHtml(title)}">
+        <div class="book-memo-content typewriter-content" data-typewriter-text="${escapeHtml(normalized)}"></div>
+      </section>
+    </details>
   `;
 }
 
