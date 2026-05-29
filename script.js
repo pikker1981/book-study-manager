@@ -17,69 +17,36 @@ let state = {
   attendance: []
 };
 
+let currentUser = null;
+
 const $ = selector => document.querySelector(selector);
 const $$ = selector => Array.from(document.querySelectorAll(selector));
 
 init();
 
 async function init() {
-  bindLockEvents();
-
-  if (localStorage.getItem('bookStudyUnlocked') === 'true' || sessionStorage.getItem('bookStudyUnlocked') === 'true') {
-    await unlockAndStart();
-  }
-}
-
-function normalizePassword(value) {
-  return String(value || '')
-    .normalize('NFKC')
-    .trim();
-}
-
-function bindLockEvents() {
-  const lockForm = $('#lockForm');
-  lockForm?.addEventListener('submit', async event => {
-    event.preventDefault();
-    const passwordInput = $('#accessPassword');
-    const error = $('#lockError');
-    const inputPassword = normalizePassword(passwordInput?.value || '');
-    const appPassword = normalizePassword(config.APP_PASSWORD || 'bookstudy');
-
-    if (inputPassword === appPassword) {
-      sessionStorage.setItem('bookStudyUnlocked', 'true');
-      localStorage.setItem('bookStudyUnlocked', 'true');
-      if (error) error.hidden = true;
-      await unlockAndStart();
-      return;
-    }
-
-    if (error) {
-      error.textContent = '비밀번호가 맞지 않습니다. config.js의 APP_PASSWORD 값과 같은지 확인하세요.';
-      error.hidden = false;
-    }
-    passwordInput?.select();
-  });
-}
-
-async function unlockAndStart() {
-  $('#lockScreen')?.setAttribute('hidden', '');
-  $('#appShell')?.removeAttribute('hidden');
-  $('#mobileNav')?.removeAttribute('hidden');
-
   bindEvents();
   showConfigWarningIfNeeded();
 
   if (!db) {
-    showLoading(false);
-    render();
+    showAuth();
     return;
   }
 
-  await enterApp();
+  const { data } = await db.auth.getSession();
+  if (data?.session?.user) {
+    currentUser = data.session.user;
+    await enterApp();
+  } else {
+    showAuth();
+  }
 }
 
 function bindEvents() {
   window.addEventListener('hashchange', renderNavigation);
+
+  $('#loginForm')?.addEventListener('submit', handleLogin);
+  $('#logoutButton')?.addEventListener('click', handleLogout);
 
   $$('[data-open-modal]').forEach(button => {
     button.addEventListener('click', () => openCreateModal(button.dataset.openModal));
@@ -100,22 +67,63 @@ function showConfigWarningIfNeeded() {
   if (warning) warning.hidden = hasSupabaseConfig;
 }
 
+async function handleLogin(event) {
+  event.preventDefault();
+  if (!db) return setAuthMessage('config.js 설정이 필요합니다.');
+
+  const form = event.currentTarget;
+  const email = form.email.value.trim();
+  const password = form.password.value;
+
+  setAuthMessage('로그인 중입니다.');
+  const { data, error } = await db.auth.signInWithPassword({ email, password });
+  if (error) {
+    setAuthMessage(`로그인 실패: ${error.message}`);
+    return;
+  }
+
+  currentUser = data.user;
+  setAuthMessage('');
+  await enterApp();
+}
+
+async function handleLogout() {
+  if (!db) return;
+  await db.auth.signOut();
+  currentUser = null;
+  state = { books: [], members: [], meetings: [], attendance: [] };
+  showAuth();
+}
+
 async function enterApp() {
   showLoading(true);
   try {
     await loadAll();
+    $('#authScreen').hidden = true;
+    $('#appShell').hidden = false;
     showLoading(false);
     render();
   } catch (error) {
     showLoading(false);
-    alert(`데이터 로딩 실패: ${error.message}`);
-    render();
+    showAuth();
+    setAuthMessage(`데이터 로딩 실패: ${error.message}`);
   }
+}
+
+function showAuth() {
+  $('#authScreen').hidden = false;
+  $('#appShell').hidden = true;
+  showLoading(false);
 }
 
 function showLoading(visible) {
   const loading = $('#loadingScreen');
   if (loading) loading.hidden = !visible;
+}
+
+function setAuthMessage(message) {
+  const target = $('#authMessage');
+  if (target) target.textContent = message;
 }
 
 async function loadAll() {
@@ -133,7 +141,6 @@ async function loadAll() {
 }
 
 async function selectTable(table, orderColumn, ascending) {
-  if (!db) return [];
   const { data, error } = await db
     .from(table)
     .select('*')
@@ -151,7 +158,6 @@ function render() {
   renderMeetingBookOptions();
   renderAttendanceSelector();
   renderAttendance();
-  initTypewriterAnimations();
 }
 
 function renderNavigation() {
@@ -175,14 +181,10 @@ function renderDashboard() {
       <div>
         ${currentBook.coverImage ? `<img src="${escapeHtml(currentBook.coverImage)}" alt="${escapeHtml(currentBook.title)} 표지" />` : `<div class="book-placeholder">${escapeHtml(currentBook.title)}</div>`}
         <p class="panel-meta">현재 읽는 책</p>
-        <h2 class="book-title-accent">${escapeHtml(currentBook.title)}</h2>
+        <h2>${escapeHtml(currentBook.title)}</h2>
         <p class="card-body">${escapeHtml(currentBook.author)}</p>
-        ${formatBookDetails(currentBook)}
       </div>
-      <div class="panel-footer-actions">
-        <p class="card-meta">${formatDate(currentBook.startDate)} - ${formatDate(currentBook.endDate)}</p>
-        <button class="text-button" type="button" onclick="editBook('${currentBook.id}')">책 내용 수정</button>
-      </div>
+      <p class="card-meta">${formatDate(currentBook.startDate)} - ${formatDate(currentBook.endDate)}</p>
     `;
   } else {
     currentBookPanel.innerHTML = `<div><p class="panel-meta">현재 읽는 책</p><h2>등록된 책이 없어요</h2></div>`;
@@ -191,20 +193,12 @@ function renderDashboard() {
   if (nextMeeting) {
     const attendance = getMeetingAttendance(nextMeeting.id);
     const attendCount = attendance.filter(item => item.status === 'attend').length;
-    const meetingBook = getBook(nextMeeting.bookId);
     nextMeetingPanel.innerHTML = `
       <div>
         <p class="panel-meta">다음 모임</p>
         <h2>${escapeHtml(nextMeeting.title)}</h2>
-        <p class="card-body meeting-date-accent">${formatDate(nextMeeting.date)} ${nextMeeting.time || ''}</p>
-        <p class="card-meta meeting-location-accent">${escapeHtml(nextMeeting.location || '장소 미정')}</p>
-        ${meetingBook ? `
-          <div class="meeting-book-summary">
-            <p class="panel-meta">함께 읽는 책</p>
-            <p class="card-body book-title-accent">${escapeHtml(meetingBook.title)}</p>
-            <p class="card-meta">${escapeHtml(meetingBook.author)}</p>
-          </div>
-        ` : `<p class="card-meta book-detail-line">연결된 책 없음</p>`}
+        <p class="card-body">${formatDate(nextMeeting.date)} ${nextMeeting.time || ''}</p>
+        <p class="card-meta">${escapeHtml(nextMeeting.location || '장소 미정')}</p>
       </div>
       <p class="card-meta">참석 예정 ${attendCount}명 / 전체 ${state.members.length}명</p>
     `;
@@ -214,33 +208,13 @@ function renderDashboard() {
 
   const totalMembers = state.members.length;
   const activeMembers = state.members.filter(member => member.status === 'active').length;
-  const visibleMembers = state.members.slice(0, 6);
-  const hiddenCount = Math.max(totalMembers - visibleMembers.length, 0);
-  const nextMeetingAttendeeIds = nextMeeting
-    ? new Set(getMeetingAttendance(nextMeeting.id).filter(item => item.status === 'attend').map(item => item.memberId))
-    : new Set();
-
   attendancePanel.innerHTML = `
     <div>
       <p class="panel-meta">멤버 현황</p>
       <div class="panel-number">${activeMembers}</div>
       <p class="card-body">활동 중인 멤버</p>
-      ${visibleMembers.length ? `
-        <div class="member-mini-list">
-          ${visibleMembers.map(member => {
-            const isAttending = nextMeetingAttendeeIds.has(member.id);
-            return `
-              <div class="member-mini-item${isAttending ? ' is-attending' : ''}">
-                <span class="member-name-accent">${escapeHtml(member.name)}</span>
-                <span class="member-phone-accent">${escapeHtml(member.phone || '연락처 없음')}</span>
-                ${isAttending ? '<span class="member-attend-badge">참여</span>' : ''}
-              </div>
-            `;
-          }).join('')}
-        </div>
-      ` : `<p class="card-meta book-detail-line">등록된 멤버가 없어요.</p>`}
     </div>
-    <p class="card-meta">전체 ${totalMembers}명${hiddenCount ? ` · 외 ${hiddenCount}명` : ''}</p>
+    <p class="card-meta">전체 ${totalMembers}명</p>
   `;
 }
 
@@ -255,13 +229,12 @@ function renderBooks() {
     <article class="book-card">
       ${book.coverImage ? `<img class="book-cover" src="${escapeHtml(book.coverImage)}" alt="${escapeHtml(book.title)} 표지" />` : `<div class="book-placeholder">${escapeHtml(book.title)}</div>`}
       <div>
-        <h2 class="card-title book-title-accent">${escapeHtml(book.title)}</h2>
+        <h2 class="card-title">${escapeHtml(book.title)}</h2>
         <p class="card-body">${escapeHtml(book.author)}</p>
         <p class="card-meta">${book.status === 'reading' ? '읽는 중' : '완료'} · ${formatDate(book.startDate)} - ${formatDate(book.endDate)}</p>
-        ${formatBookDetails(book)}
       </div>
       <div class="card-actions">
-        <button class="btn btn-secondary" onclick="editBook('${book.id}')">내용 수정</button>
+        <button class="btn btn-secondary" onclick="editBook('${book.id}')">수정</button>
         <button class="btn btn-secondary status-danger" onclick="deleteBook('${book.id}')">삭제</button>
       </div>
     </article>
@@ -278,8 +251,8 @@ function renderMembers() {
   container.innerHTML = state.members.map(member => `
     <div class="list-row">
       <div>
-        <p class="row-title member-name-accent">${escapeHtml(member.name)}</p>
-        <p class="row-sub"><span class="member-phone-accent">${escapeHtml(member.phone || '연락처 없음')}</span> · ${member.status === 'active' ? '활동 중' : '비활성'} · ${member.joinedAt || '-'}</p>
+        <p class="row-title">${escapeHtml(member.name)}</p>
+        <p class="row-sub">${escapeHtml(member.phone || '연락처 없음')} · ${member.status === 'active' ? '활동 중' : '비활성'} · ${member.joinedAt || '-'}</p>
       </div>
       <div class="row-actions">
         <button class="btn btn-secondary" onclick="editMember('${member.id}')">수정</button>
@@ -305,11 +278,11 @@ function renderMeetings() {
       <div class="list-row">
         <div>
           <p class="row-title">${escapeHtml(meeting.title)}</p>
-          <p class="row-sub"><span class="meeting-date-accent">${formatDate(meeting.date)} ${meeting.time || ''}</span> · <span class="meeting-location-accent">${escapeHtml(meeting.location || '장소 미정')}</span></p>
-          <p class="row-sub">${book ? `<span class="book-title-accent">${escapeHtml(book.title)}</span> · ${escapeHtml(book.author)}` : '책 없음'}</p>
+          <p class="row-sub">${formatDate(meeting.date)} ${meeting.time || ''} · ${escapeHtml(meeting.location || '장소 미정')} · ${escapeHtml(book?.title || '책 없음')}</p>
           <p class="row-sub">참석 ${attendCount}명 / 전체 ${state.members.length}명</p>
         </div>
         <div class="row-actions">
+          <button class="btn btn-secondary" onclick="openMeetingNotes('${meeting.id}')">🎙️ 회의록/녹음</button>
           <button class="btn btn-secondary" onclick="editMeeting('${meeting.id}')">수정</button>
           <button class="btn btn-secondary status-danger" onclick="deleteMeeting('${meeting.id}')">삭제</button>
         </div>
@@ -361,8 +334,8 @@ function renderAttendance() {
     return `
       <div class="list-row">
         <div>
-          <p class="row-title member-name-accent">${escapeHtml(member.name)}</p>
-          <p class="row-sub"><span class="member-phone-accent">${escapeHtml(member.phone || '연락처 없음')}</span> · 현재 상태: ${statusLabel(status)}</p>
+          <p class="row-title">${escapeHtml(member.name)}</p>
+          <p class="row-sub">현재 상태: ${statusLabel(status)}</p>
         </div>
         <div class="attendance-controls">
           <button class="${status === 'attend' ? 'active' : ''}" onclick="setAttendance('${meetingId}', '${member.id}', 'attend')">참석</button>
@@ -384,8 +357,7 @@ async function handleBookSubmit(event) {
     start_date: form.startDate.value || null,
     end_date: form.endDate.value || null,
     status: form.status.value,
-    memo: form.memo.value.trim() || null,
-    toc: form.toc.value.trim() || null
+    memo: form.memo.value.trim() || null
   };
 
   if (!payload.title || !payload.author) return alert('책 제목과 저자는 필수입니다.');
@@ -402,8 +374,7 @@ async function handleMemberSubmit(event) {
     phone: form.phone.value.trim() || null,
     status: form.status.value,
     joined_at: form.joinedAt.value || new Date().toISOString().slice(0, 10),
-    memo: form.memo.value.trim() || null,
-    toc: form.toc.value.trim() || null
+    memo: form.memo.value.trim() || null
   };
 
   if (!payload.name) return alert('이름은 필수입니다.');
@@ -421,8 +392,7 @@ async function handleMeetingSubmit(event) {
     meeting_date: form.date.value,
     meeting_time: form.time.value || null,
     location: form.location.value.trim() || null,
-    memo: form.memo.value.trim() || null,
-    toc: form.toc.value.trim() || null
+    memo: form.memo.value.trim() || null
   };
 
   if (!payload.title || !payload.meeting_date) return alert('모임 제목과 날짜는 필수입니다.');
@@ -432,7 +402,6 @@ async function handleMeetingSubmit(event) {
 }
 
 async function upsertRow(table, id, payload) {
-  if (!db) return alert('config.js에 Supabase 설정이 필요합니다.');
   let query;
   if (id) {
     query = db.from(table).update(payload).eq('id', id).select().single();
@@ -444,7 +413,6 @@ async function upsertRow(table, id, payload) {
 }
 
 async function deleteRow(table, id) {
-  if (!db) return alert('config.js에 Supabase 설정이 필요합니다.');
   const { error } = await db.from(table).delete().eq('id', id);
   if (error) throwAndAlert(error);
 }
@@ -466,7 +434,6 @@ window.editBook = function editBook(id) {
   form.endDate.value = book.endDate || '';
   form.status.value = book.status;
   form.memo.value = book.memo || '';
-  form.toc.value = book.toc || '';
   openModal('bookModal', '책 수정');
 };
 
@@ -516,7 +483,6 @@ window.deleteMeeting = async function deleteMeeting(id) {
 };
 
 window.setAttendance = async function setAttendance(meetingId, memberId, status) {
-  if (!db) return alert('config.js에 Supabase 설정이 필요합니다.');
   const existing = state.attendance.find(item => item.meetingId === meetingId && item.memberId === memberId);
   const payload = {
     meeting_id: meetingId,
@@ -589,8 +555,7 @@ function mapBookFromDb(row) {
     startDate: row.start_date || '',
     endDate: row.end_date || '',
     status: row.status,
-    memo: row.memo || '',
-    toc: row.toc || ''
+    memo: row.memo || ''
   };
 }
 
@@ -613,7 +578,9 @@ function mapMeetingFromDb(row) {
     date: row.meeting_date,
     time: row.meeting_time ? row.meeting_time.slice(0, 5) : '',
     location: row.location || '',
-    memo: row.memo || ''
+    memo: row.memo || '',
+    transcript: row.transcript || '',
+    summary: row.summary || ''
   };
 }
 
@@ -623,106 +590,8 @@ function mapAttendanceFromDb(row) {
     meetingId: row.meeting_id,
     memberId: row.member_id,
     status: row.status,
-    memo: row.memo || '',
-    toc: row.toc || ''
+    memo: row.memo || ''
   };
-}
-
-let typewriterTimers = new Map();
-
-function initTypewriterAnimations() {
-  typewriterTimers.forEach(timer => clearInterval(timer));
-  typewriterTimers = new Map();
-
-  const detailsList = $$('.book-memo-details');
-  detailsList.forEach(details => {
-    const target = details.querySelector('[data-typewriter-text]');
-    if (!target) return;
-
-    target.textContent = '';
-    target.dataset.typed = 'false';
-    target.classList.remove('is-typing');
-
-    details.addEventListener('toggle', () => {
-      if (details.open) startTypewriter(target);
-    });
-
-    if (details.open) startTypewriter(target);
-  });
-}
-
-function startTypewriter(target) {
-  const text = target.dataset.typewriterText || '';
-  if (!text || target.dataset.typed === 'true') return;
-
-  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  target.dataset.typed = 'true';
-  target.textContent = '';
-
-  if (reduceMotion) {
-    target.textContent = text;
-    return;
-  }
-
-  target.classList.add('is-typing');
-
-  let index = 0;
-  const step = text.length > 450 ? 3 : text.length > 220 ? 2 : 1;
-  const speed = text.length > 450 ? 8 : 13;
-
-  const timer = setInterval(() => {
-    index = Math.min(index + step, text.length);
-    target.textContent = text.slice(0, index);
-
-    if (index >= text.length) {
-      clearInterval(timer);
-      typewriterTimers.delete(target);
-      target.classList.remove('is-typing');
-    }
-  }, speed);
-
-  typewriterTimers.set(target, timer);
-}
-
-function formatBookDetails(book) {
-  const blocks = [
-    formatCollapsibleBlock(book.memo, '책 내용 보기', '책 내용', true),
-    formatCollapsibleBlock(book.toc, '목차 보기', '목차', false)
-  ].filter(Boolean);
-
-  if (!blocks.length) return '';
-  return `<div class="book-detail-toggles">${blocks.join('')}</div>`;
-}
-
-function formatCollapsibleBlock(content, buttonLabel, title = '내용', useTypewriter = false) {
-  if (!content) return '';
-  const normalized = String(content).replace(/\r\n/g, '\n').trim();
-  if (!normalized) return '';
-
-  const contentClass = useTypewriter ? 'book-memo-content typewriter-content' : 'book-memo-content';
-  const contentAttrs = useTypewriter
-    ? `data-typewriter-text="${escapeHtml(normalized)}"`
-    : '';
-  const contentHtml = useTypewriter
-    ? ''
-    : formatPlainTextContent(normalized);
-
-  return `
-    <details class="book-memo-details">
-      <summary class="book-memo-toggle">${escapeHtml(buttonLabel)}</summary>
-      <section class="book-memo-card" aria-label="${escapeHtml(title)}">
-        <p class="book-memo-label">${escapeHtml(title)}</p>
-        <div class="${contentClass}" ${contentAttrs}>${contentHtml}</div>
-      </section>
-    </details>
-  `;
-}
-
-function formatPlainTextContent(value) {
-  return String(value)
-    .split(/\n{2,}/)
-    .map(paragraph => `<p>${escapeHtml(paragraph).replace(/\n/g, '<br>')}</p>`)
-    .join('');
 }
 
 function getBook(bookId) {
@@ -761,3 +630,433 @@ function throwAndAlert(error) {
   alert(`처리 실패: ${error.message}`);
   throw error;
 }
+
+// ==========================================
+// 회의 녹음 및 AI 회의록 관련 전역 변수 및 함수
+// ==========================================
+
+let mediaRecorder = null;
+let audioChunks = [];
+let recordingStartTime = 0;
+let recordingInterval = null;
+let audioContext = null;
+let analyser = null;
+let dataArray = null;
+let animationFrameId = null;
+let recordedBlob = null;
+
+// 모임 회의록/녹음 모달 열기
+window.openMeetingNotes = function openMeetingNotes(meetingId) {
+  const meeting = state.meetings.find(m => m.id === meetingId);
+  if (!meeting) return;
+
+  $('#notesMeetingId').value = meetingId;
+  $('#notesModalTitle').textContent = `${escapeHtml(meeting.title)} - 회의록 및 녹음`;
+
+  // 보기 영역 데이터 설정
+  $('#notesSummaryView').textContent = meeting.summary || '아직 작성된 요약이 없습니다.';
+  $('#notesSummaryView').classList.toggle('placeholder-text', !meeting.summary);
+  $('#notesTranscriptView').textContent = meeting.transcript || '아직 전사된 내용이 없습니다.';
+  $('#notesTranscriptView').classList.toggle('placeholder-text', !meeting.transcript);
+
+  // 편집 영역 데이터 설정
+  $('#notesSummaryEdit').value = meeting.summary || '';
+  $('#notesTranscriptEdit').value = meeting.transcript || '';
+
+  // API 키 로드
+  const savedKey = localStorage.getItem('gemini_api_key');
+  $('#geminiApiKeyInput').value = savedKey || '';
+
+  // 녹음 상태 초기화
+  recordedBlob = null;
+  audioChunks = [];
+  if (recordingInterval) clearInterval(recordingInterval);
+  $('#recordingTimer').textContent = '00:00:00';
+  $('#recordingStatusText').textContent = '준비 완료';
+  $('#recordingStatusDot').classList.remove('active');
+  $('#startRecordBtn').disabled = false;
+  $('#stopRecordBtn').disabled = true;
+  $('#audioPlaybackContainer').hidden = true;
+  $('#aiProgressContainer').hidden = true;
+
+  // 비주얼라이저 캔버스 초기 라인 그리기
+  setTimeout(() => {
+    const canvas = $('#audioVisualizer');
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, canvas.height / 2);
+      ctx.lineTo(canvas.width, canvas.height / 2);
+      ctx.stroke();
+    }
+  }, 100);
+
+  switchNotesTab('view');
+  openModal('meetingNotesModal');
+};
+
+// 탭 전환 처리
+window.switchNotesTab = function switchNotesTab(tabId) {
+  // 탭 버튼 스타일 전환
+  $$('.tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.id === `tabBtn_${tabId}`);
+  });
+
+  // 탭 콘텐츠 숨김/노출 전환
+  $('#notesTab_view').hidden = tabId !== 'view';
+  $('#notesTab_edit').hidden = tabId !== 'edit';
+  $('#notesTab_record').hidden = tabId !== 'record';
+
+  // 보기 탭으로 전환될 때 편집 창의 최신 내용을 동기화
+  if (tabId === 'view') {
+    const summary = $('#notesSummaryEdit').value.trim();
+    const transcript = $('#notesTranscriptEdit').value.trim();
+    
+    $('#notesSummaryView').textContent = summary || '아직 작성된 요약이 없습니다.';
+    $('#notesSummaryView').classList.toggle('placeholder-text', !summary);
+    $('#notesTranscriptView').textContent = transcript || '아직 전사된 내용이 없습니다.';
+    $('#notesTranscriptView').classList.toggle('placeholder-text', !transcript);
+  }
+};
+
+// Gemini API Key 로컬 저장
+window.saveGeminiApiKey = function saveGeminiApiKey() {
+  const key = $('#geminiApiKeyInput').value.trim();
+  if (key) {
+    localStorage.setItem('gemini_api_key', key);
+    alert('Gemini API 키가 로컬 저장소에 저장되었습니다.');
+  } else {
+    localStorage.removeItem('gemini_api_key');
+    alert('Gemini API 키가 삭제되었습니다.');
+  }
+};
+
+// 녹음 타이머 업데이트
+function updateTimer() {
+  const elapsed = Date.now() - recordingStartTime;
+  const seconds = Math.floor((elapsed / 1000) % 60);
+  const minutes = Math.floor((elapsed / (1000 * 60)) % 60);
+  const hours = Math.floor(elapsed / (1000 * 60 * 60));
+
+  const pad = num => String(num).padStart(2, '0');
+  const timerText = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+  const timerElement = $('#recordingTimer');
+  if (timerElement) timerElement.textContent = timerText;
+}
+
+// 실시간 오디오 비주얼라이저 드로잉 루프
+function drawVisualizer() {
+  const canvas = $('#audioVisualizer');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const width = canvas.width;
+  const height = canvas.height;
+
+  animationFrameId = requestAnimationFrame(drawVisualizer);
+
+  if (!analyser) {
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, width, height);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, height / 2);
+    ctx.lineTo(width, height / 2);
+    ctx.stroke();
+    return;
+  }
+
+  const bufferLength = analyser.frequencyBinCount;
+  analyser.getByteTimeDomainData(dataArray);
+
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, width, height);
+  
+  // 파형 그리기 (빨간색 라인)
+  ctx.strokeStyle = '#ff003c';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+
+  const sliceWidth = width * 1.0 / bufferLength;
+  let x = 0;
+
+  for (let i = 0; i < bufferLength; i++) {
+    const v = dataArray[i] / 128.0;
+    const y = v * height / 2;
+
+    if (i === 0) {
+      ctx.moveTo(x, y);
+    } else {
+      ctx.lineTo(x, y);
+    }
+
+    x += sliceWidth;
+  }
+
+  ctx.lineTo(canvas.width, canvas.height / 2);
+  ctx.stroke();
+}
+
+// 녹음 시작
+window.startRecording = async function startRecording() {
+  recordedBlob = null;
+  audioChunks = [];
+  
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    
+    // 호환 가능한 코덱 확인 및 저비트레이트 설정 (AI 최적화)
+    let options = {};
+    if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+      options = { mimeType: 'audio/webm;codecs=opus', audioBitsPerSecond: 24000 };
+    } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+      options = { mimeType: 'audio/webm', audioBitsPerSecond: 24000 };
+    } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
+      options = { mimeType: 'audio/ogg', audioBitsPerSecond: 24000 };
+    } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+      options = { mimeType: 'audio/mp4', audioBitsPerSecond: 24000 };
+    }
+
+    mediaRecorder = new MediaRecorder(stream, options);
+    
+    // 비주얼라이저 구현을 위한 AudioContext 세팅
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const source = audioContext.createMediaStreamSource(stream);
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 256;
+    source.connect(analyser);
+    dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+    mediaRecorder.ondataavailable = event => {
+      if (event.data.size > 0) audioChunks.push(event.data);
+    };
+
+    mediaRecorder.onstop = () => {
+      // 녹음 완료 처리 및 플레이어 연결
+      recordedBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+      const audioUrl = URL.createObjectURL(recordedBlob);
+      const player = $('#meetingAudioPlayer');
+      if (player) player.src = audioUrl;
+      
+      $('#audioPlaybackContainer').hidden = false;
+
+      // 비주얼라이저 중지 및 컨텍스트 정리
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
+      analyser = null;
+      if (audioContext) {
+        audioContext.close();
+        audioContext = null;
+      }
+      
+      // 캔버스 초기화
+      const canvas = $('#audioVisualizer');
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.beginPath();
+        ctx.moveTo(0, canvas.height / 2);
+        ctx.lineTo(canvas.width, canvas.height / 2);
+        ctx.stroke();
+      }
+    };
+
+    mediaRecorder.start();
+    
+    // 타이머 및 시각화 활성화
+    recordingStartTime = Date.now();
+    recordingInterval = setInterval(updateTimer, 1000);
+    drawVisualizer();
+
+    // UI 변경
+    $('#startRecordBtn').disabled = true;
+    $('#stopRecordBtn').disabled = false;
+    $('#recordingStatusDot').classList.add('active');
+    $('#recordingStatusText').textContent = '녹음 중...';
+    $('#audioPlaybackContainer').hidden = true;
+  } catch (error) {
+    alert(`마이크 권한 획득 또는 녹음 시작 실패: ${error.message}`);
+  }
+};
+
+// 녹음 중지
+window.stopRecording = function stopRecording() {
+  if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
+
+  mediaRecorder.stop();
+  mediaRecorder.stream.getTracks().forEach(track => track.stop());
+
+  if (recordingInterval) clearInterval(recordingInterval);
+
+  $('#startRecordBtn').disabled = false;
+  $('#stopRecordBtn').disabled = true;
+  $('#recordingStatusDot').classList.remove('active');
+  $('#recordingStatusText').textContent = '녹음 완료';
+};
+
+// 음성 다운로드
+window.downloadAudioFile = function downloadAudioFile() {
+  if (!recordedBlob) return alert('녹음된 오디오가 없습니다.');
+  const meetingId = $('#notesMeetingId').value;
+  const meeting = state.meetings.find(m => m.id === meetingId);
+  const extension = recordedBlob.type.includes('mp4') ? 'mp4' : 'webm';
+  const fileName = `recording_${meeting ? meeting.title.replace(/\s+/g, '_') : 'meeting'}.${extension}`;
+  
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(recordedBlob);
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+};
+
+// AI 회의록 생성 및 파싱
+window.generateAiNotes = async function generateAiNotes() {
+  const apiKey = localStorage.getItem('gemini_api_key');
+  if (!apiKey) return alert('먼저 Gemini API 키를 입력하고 저장해 주세요.');
+  if (!recordedBlob) return alert('녹음 데이터가 존재하지 않습니다. 먼저 녹음을 진행하세요.');
+
+  $('#aiProgressContainer').hidden = false;
+  $('#generateAiNotesBtn').disabled = true;
+
+  try {
+    const base64Audio = await blobToBase64(recordedBlob);
+    const mimeType = recordedBlob.type;
+
+    const text = await callGeminiAPI(apiKey, base64Audio, mimeType);
+    
+    // AI 응답 마크다운 헤더로 파싱 분할
+    let transcript = '';
+    let summary = '';
+
+    const transcriptMarker = '# [전사 결과]';
+    const summaryMarker = '# [요약 및 정리]';
+
+    const tIndex = text.indexOf(transcriptMarker);
+    const sIndex = text.indexOf(summaryMarker);
+
+    if (tIndex !== -1 && sIndex !== -1) {
+      if (tIndex < sIndex) {
+        transcript = text.slice(tIndex + transcriptMarker.length, sIndex).trim();
+        summary = text.slice(sIndex + summaryMarker.length).trim();
+      } else {
+        summary = text.slice(sIndex + summaryMarker.length, tIndex).trim();
+        transcript = text.slice(tIndex + transcriptMarker.length).trim();
+      }
+    } else {
+      summary = text;
+      transcript = '텍스트 분리에 실패하여 전체 내용을 요약 본문에 로드합니다.';
+    }
+
+    // 입력 폼 바인딩
+    $('#notesSummaryEdit').value = summary;
+    $('#notesTranscriptEdit').value = transcript;
+
+    // 편집 탭으로 화면 전환하여 수정 기회 제공
+    switchNotesTab('edit');
+    alert('AI 분석 및 요약이 임시 저장되었습니다! 내용을 검토하고 아래 [회의록 저장] 버튼을 눌러 확정해 주세요.');
+  } catch (error) {
+    alert(`AI 회의록 생성 중 오류가 발생했습니다: ${error.message}`);
+  } finally {
+    $('#aiProgressContainer').hidden = true;
+    $('#generateAiNotesBtn').disabled = false;
+  }
+};
+
+// Blob -> Base64 변환 유틸 함수
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result.split(',')[1];
+      resolve(base64String);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+// Gemini API 연동 fetch 요청
+async function callGeminiAPI(apiKey, audioBase64, mimeType) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      contents: [{
+        parts: [
+          {
+            text: "이 오디오는 북 스터디 모임의 녹음 파일입니다.\n\n" +
+                  "다음 두 가지 작업을 수행해 주세요:\n" +
+                  "1. 전사(Transcript): 대화 내용을 가능한 한 상세하게 한글로 전사해 주세요.\n" +
+                  "2. 요약 및 정리(Summary): 주요 논의 주제, 책에 대한 의견, 결정된 사항, 다음 모임 계획 등을 구조화된 마크다운 형식으로 보기 좋게 정리해 주세요.\n\n" +
+                  "출력 형식은 반드시 아래의 마크다운 헤더로 시작하도록 나누어 작성해 주세요. 다른 서론이나 꼬리말은 넣지 마세요:\n" +
+                  "# [전사 결과]\n(여기에 전사된 내용을 상세히 적어주세요)\n\n# [요약 및 정리]\n(여기에 구조화되고 깔끔한 회의 요약을 적어주세요)"
+          },
+          {
+            inlineData: {
+              mimeType: mimeType,
+              data: audioBase64
+            }
+          }
+        ]
+      }]
+    })
+  });
+
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(err.error?.message || 'Gemini API 호출 중 서버가 에러를 반환했습니다.');
+  }
+
+  const data = await response.json();
+  return data.candidates[0].content.parts[0].text;
+}
+
+// DB에 전사 및 요약본 영구 저장
+window.saveMeetingNotes = async function saveMeetingNotes() {
+  const meetingId = $('#notesMeetingId').value;
+  if (!meetingId) return;
+
+  const summary = $('#notesSummaryEdit').value.trim();
+  const transcript = $('#notesTranscriptEdit').value.trim();
+
+  try {
+    const { error } = await db
+      .from('meetings')
+      .update({
+        summary: summary || null,
+        transcript: transcript || null
+      })
+      .eq('id', meetingId);
+
+    if (error) throw error;
+
+    // 로컬 상태 동기화
+    const meeting = state.meetings.find(m => m.id === meetingId);
+    if (meeting) {
+      meeting.summary = summary;
+      meeting.transcript = transcript;
+    }
+
+    // 뷰 내용 변경
+    $('#notesSummaryView').textContent = summary || '아직 작성된 요약이 없습니다.';
+    $('#notesSummaryView').classList.toggle('placeholder-text', !summary);
+    $('#notesTranscriptView').textContent = transcript || '아직 전사된 내용이 없습니다.';
+    $('#notesTranscriptView').classList.toggle('placeholder-text', !transcript);
+
+    switchNotesTab('view');
+    alert('회의록이 데이터베이스에 저장되었습니다.');
+    await refreshAndRender();
+  } catch (error) {
+    alert(`회의록 저장 실패: ${error.message}`);
+  }
+};
+
