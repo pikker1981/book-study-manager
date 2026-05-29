@@ -1,6 +1,6 @@
--- Book Study Manager Supabase schema - 공개 편집판
+-- Book Study Manager Supabase schema
 -- 실행 위치: Supabase Dashboard > SQL Editor
--- 로그인 없이 누구나 읽기/쓰기/수정/삭제 가능한 정책입니다.
+-- 중요: 아래 ADMIN_EMAIL 값을 실제 관리자 이메일로 바꾼 뒤 실행하세요.
 
 -- UUID 생성을 위한 확장. 대부분의 Supabase 프로젝트에서 사용 가능합니다.
 create extension if not exists pgcrypto;
@@ -43,6 +43,8 @@ create table if not exists meetings (
   meeting_time time,
   location text,
   memo text,
+  transcript text,
+  summary text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -87,48 +89,60 @@ alter table members enable row level security;
 alter table meetings enable row level security;
 alter table attendance enable row level security;
 
--- 공개 편집판 정책
--- 로그인 없이 접속한 사용자(anon role)도 모든 데이터를 읽고, 추가하고, 수정하고, 삭제할 수 있습니다.
--- 주소가 외부에 노출되면 누구나 데이터를 바꿀 수 있으니 운영 시 주의하세요.
+-- 관리자 이메일을 반드시 실제 로그인 이메일로 교체하세요.
+-- 예: auth.jwt() ->> 'email' = 'myname@gmail.com'
 
 drop policy if exists "admin can read books" on books;
+create policy "admin can read books" on books
+for select to authenticated
+using (auth.jwt() ->> 'email' = 'ADMIN_EMAIL');
+
 drop policy if exists "admin can write books" on books;
-drop policy if exists "public can manage books" on books;
-create policy "public can manage books" on books
-for all to anon
-using (true)
-with check (true);
+create policy "admin can write books" on books
+for all to authenticated
+using (auth.jwt() ->> 'email' = 'ADMIN_EMAIL')
+with check (auth.jwt() ->> 'email' = 'ADMIN_EMAIL');
 
 drop policy if exists "admin can read members" on members;
+create policy "admin can read members" on members
+for select to authenticated
+using (auth.jwt() ->> 'email' = 'ADMIN_EMAIL');
+
 drop policy if exists "admin can write members" on members;
-drop policy if exists "public can manage members" on members;
-create policy "public can manage members" on members
-for all to anon
-using (true)
-with check (true);
+create policy "admin can write members" on members
+for all to authenticated
+using (auth.jwt() ->> 'email' = 'ADMIN_EMAIL')
+with check (auth.jwt() ->> 'email' = 'ADMIN_EMAIL');
 
 drop policy if exists "admin can read meetings" on meetings;
+create policy "admin can read meetings" on meetings
+for select to authenticated
+using (auth.jwt() ->> 'email' = 'ADMIN_EMAIL');
+
 drop policy if exists "admin can write meetings" on meetings;
-drop policy if exists "public can manage meetings" on meetings;
-create policy "public can manage meetings" on meetings
-for all to anon
-using (true)
-with check (true);
+create policy "admin can write meetings" on meetings
+for all to authenticated
+using (auth.jwt() ->> 'email' = 'ADMIN_EMAIL')
+with check (auth.jwt() ->> 'email' = 'ADMIN_EMAIL');
 
 drop policy if exists "admin can read attendance" on attendance;
+create policy "admin can read attendance" on attendance
+for select to authenticated
+using (auth.jwt() ->> 'email' = 'ADMIN_EMAIL');
+
 drop policy if exists "admin can write attendance" on attendance;
-drop policy if exists "public can manage attendance" on attendance;
-create policy "public can manage attendance" on attendance
-for all to anon
-using (true)
-with check (true);
+create policy "admin can write attendance" on attendance
+for all to authenticated
+using (auth.jwt() ->> 'email' = 'ADMIN_EMAIL')
+with check (auth.jwt() ->> 'email' = 'ADMIN_EMAIL');
+
 -- 선택: 샘플 데이터. 필요 없으면 실행하지 않아도 됩니다.
 -- insert into books (title, author, start_date, end_date, status, memo)
 -- values ('지구 끝의 온실', '김초엽', '2026-05-01', '2026-05-31', 'reading', '5월 독서모임 선정 도서');
 
 -- Data API 권한. RLS가 실제 접근 범위를 제한합니다.
 grant usage on schema public to anon, authenticated;
-grant select, insert, update, delete on books to anon, authenticated;
-grant select, insert, update, delete on members to anon, authenticated;
-grant select, insert, update, delete on meetings to anon, authenticated;
-grant select, insert, update, delete on attendance to anon, authenticated;
+grant select, insert, update, delete on books to authenticated;
+grant select, insert, update, delete on members to authenticated;
+grant select, insert, update, delete on meetings to authenticated;
+grant select, insert, update, delete on attendance to authenticated;
